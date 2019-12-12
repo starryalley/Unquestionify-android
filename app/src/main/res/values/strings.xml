@@ -34,4 +34,9 @@
     <string name="needs_permission_detail">This app needs notification access permission to be able to read other App\'s notification. Click on \"Go to Settings\" and grant permission.</string>
     <string name="go_to_settings">Go to Settings</string>
 
+    <string name="select_notify">App Notifications</string>
+    <string name="settings">App Settings</string>
+    <string name="select_notify_app">Select which applications can send notifications as images</string>
+
+    <string name="loading_app">Loading installed Apps...</string>
 </resources>

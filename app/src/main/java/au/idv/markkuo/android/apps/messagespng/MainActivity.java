@@ -1,12 +1,5 @@
-/**
- * Copyright (C) 2015 Garmin International Ltd.
- * Subject to Garmin SDK License Agreement and Wearables Application Developer Agreement.
- */
 package au.idv.markkuo.android.apps.messagespng;
 
-import java.util.List;
-
-import android.app.AlertDialog;
 import android.app.ListActivity;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -17,12 +10,13 @@ import android.util.Log;
 import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.view.View;
-import android.widget.ListView;
+
 import android.widget.TextView;
 import android.widget.Toast;
 
-import au.idv.markkuo.android.apps.messagespng.adapter.IQDeviceAdapter;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
+
 import com.garmin.android.connectiq.ConnectIQ;
 import com.garmin.android.connectiq.ConnectIQ.ConnectIQListener;
 import com.garmin.android.connectiq.ConnectIQ.IQDeviceEventListener;
@@ -32,10 +26,15 @@ import com.garmin.android.connectiq.IQDevice.IQDeviceStatus;
 import com.garmin.android.connectiq.exception.InvalidStateException;
 import com.garmin.android.connectiq.exception.ServiceUnavailableException;
 
-public class MainActivity extends ListActivity {
+import java.util.List;
+
+import au.idv.markkuo.android.apps.messagespng.adapter.IQDeviceAdapter;
+
+public class MainActivity extends AppCompatActivity {
 
     private ConnectIQ mConnectIQ;
     private TextView mEmptyView;
+    //private ListView listView;
     private IQDeviceAdapter mAdapter;
     private boolean mSdkReady = false;
     private static final String TAG = MainActivity.class.getSimpleName();
@@ -78,7 +77,7 @@ public class MainActivity extends ListActivity {
         setContentView(R.layout.activity_main);
 
         mAdapter = new IQDeviceAdapter(this);
-        getListView().setAdapter(mAdapter);
+        //getListView().setAdapter(mAdapter);
 
         // Here we are specifying that we want to use a WIRELESS bluetooth connection.
         // We could have just called getInstance() which would by default create a version
@@ -155,9 +154,6 @@ public class MainActivity extends ListActivity {
     @Override
     public void onDestroy() {
         super.onDestroy();
-//
-//        // It is a good idea to unregister everything and shut things down to
-//        // release resources and prevent unwanted callbacks.
 //        try {
 //            mConnectIQ.unregisterAllForEvents();
 //            mConnectIQ.shutdown(this);
@@ -176,13 +172,19 @@ public class MainActivity extends ListActivity {
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
-        if (id == R.id.load_devices) {
-            loadDevices();
+        if (id == R.id.select_notify_apps) {
+            Intent intent = new Intent(this, NotificationListActivity.class);
+            //intent.putExtra(DeviceActivity.IQDEVICE, device);
+            startActivity(intent);
             return true;
+        } else if (id == R.id.settings) {
+            Intent intent = new Intent(this, NotificationSettingsActivity.class);
+            startActivity(intent);
         }
         return super.onOptionsItemSelected(item);
     }
 
+    /*
     @Override
     public void onListItemClick(ListView l, View v, int position, long id) {
         IQDevice device = mAdapter.getItem(position);
@@ -191,6 +193,8 @@ public class MainActivity extends ListActivity {
         intent.putExtra(DeviceActivity.IQDEVICE, device);
         startActivity(intent);
     }
+
+     */
 
     public void loadDevices() {
         // Retrieve the list of known devices

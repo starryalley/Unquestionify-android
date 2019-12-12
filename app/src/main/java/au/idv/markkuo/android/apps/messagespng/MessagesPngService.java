@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
@@ -14,6 +15,7 @@ import android.graphics.Paint;
 import android.graphics.Rect;
 import android.os.Bundle;
 import android.os.Handler;
+import android.preference.PreferenceManager;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
 import android.text.TextUtils;
@@ -40,6 +42,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import ar.com.hjg.pngj.ImageInfo;
@@ -47,6 +50,7 @@ import ar.com.hjg.pngj.ImageLineInt;
 import ar.com.hjg.pngj.PngReader;
 import ar.com.hjg.pngj.PngWriter;
 import ar.com.hjg.pngj.chunks.ChunkCopyBehaviour;
+import ar.com.hjg.pngj.chunks.PngChunkPLTE;
 
 public class MessagesPngService extends NotificationListenerService {
     private final String TAG = this.getClass().getSimpleName();
@@ -64,7 +68,7 @@ public class MessagesPngService extends NotificationListenerService {
     private boolean connected = false;
     private NotificationHTTPD server;
     private ArrayList<WatchNotification> mNotifications;
-    private HashSet<String> mAllowedSources;
+    private Set<String> mAllowedSources;
     private long lastUpdatedTS = 0; //last updated time stamp for notification
     private final Map<String, Long> lastNotificationWhen = new HashMap<>();
 
@@ -101,19 +105,6 @@ public class MessagesPngService extends NotificationListenerService {
             ai = null;
         }
         return (String) (ai != null ? pm.getApplicationLabel(ai) : "(unknown)");
-    }
-
-    // for testing only
-    private void listApps() {
-        final PackageManager pm = getPackageManager();
-        //get a list of installed apps.
-        List<ApplicationInfo> packages = pm.getInstalledApplications(PackageManager.GET_META_DATA);
-
-        for (ApplicationInfo packageInfo : packages) {
-            Log.d(TAG, "Installed app:[" + getAppName(packageInfo.packageName) + "]: " + packageInfo.packageName);
-            //Log.d(TAG, "Source dir : " + packageInfo.sourceDir);
-            //Log.d(TAG, "Launch Activity :" + pm.getLaunchIntentForPackage(packageInfo.packageName));
-        }
     }
 
     private static boolean isPureAscii(String v) {
@@ -208,7 +199,17 @@ public class MessagesPngService extends NotificationListenerService {
          */
     }
 
+    private ByteArrayInputStream bitmapToInputStreamUncompressed(Bitmap bitmap) {
+        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream);
+        return new ByteArrayInputStream(stream.toByteArray());
+    }
+
     private ByteArrayInputStream bitmapToInputStream(Bitmap bitmap) {
+        return bitmapToInputStream(bitmap, true, 1);
+    }
+
+    private ByteArrayInputStream bitmapToInputStream(Bitmap bitmap, boolean grayscale, int bitdepth) {
         ByteArrayOutputStream stream = new ByteArrayOutputStream();
         bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream);
         ByteArrayInputStream bais = new ByteArrayInputStream(stream.toByteArray());
@@ -218,20 +219,23 @@ public class MessagesPngService extends NotificationListenerService {
 
         // create PNG writer
         ByteArrayOutputStream baos = new ByteArrayOutputStream(stream.toByteArray().length);
-        ImageInfo imiw = new ImageInfo(reader.imgInfo.cols, reader.imgInfo.rows, 1, false, true, false);
+        ImageInfo imiw = new ImageInfo(reader.imgInfo.cols, reader.imgInfo.rows, bitdepth, false, grayscale, !grayscale);
         PngWriter writer = new PngWriter(baos, imiw);
         writer.setCompLevel(9); //max compression
         //writer.setFilterType(FilterType.FILTER_ADAPTIVE_FULL);// doesn't help
 
-        /*
-        // set palette
-        PngChunkPLTE palette = writer.getMetadata().createPLTEChunk();
-        palette.setNentries(2);
-        palette.setEntry(0, 0, 0, 0);
-        palette.setEntry(1,255, 255, 255);
-        //PngChunkSingle palette = builder.buildPngChunkPaletteFromCurrentMap(imiw);
-        writer.getMetadata().queueChunk(palette);
-        */
+        if (!grayscale) {
+            // set palette
+            PngChunkPLTE palette = writer.getMetadata().createPLTEChunk();
+            palette.setNentries(2);
+            palette.setEntry(0, 0, 0, 0);
+            palette.setEntry(0, 255, 0, 0);
+            palette.setEntry(0, 0, 255, 0);
+            palette.setEntry(0, 0, 0, 255);
+            palette.setEntry(1, 255, 255, 255);
+            //PngChunkSingle palette = builder.buildPngChunkPaletteFromCurrentMap(imiw);
+            writer.getMetadata().queueChunk(palette);
+        }
 
         writer.copyChunksFrom(reader.getChunksList(), ChunkCopyBehaviour.COPY_ALL_SAFE);
 
@@ -281,27 +285,47 @@ public class MessagesPngService extends NotificationListenerService {
         return bitmap;
     }
 
+    private void loadAllowedApps() {
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+        mAllowedSources = preferences.getStringSet("allowed_apps", null);
+        if (mAllowedSources == null) {
+            mAllowedSources = new HashSet<>();
+            mAllowedSources.add("com.google.android.talk");//hangout
+            mAllowedSources.add("jp.naver.line.android");//Line
+            mAllowedSources.add("com.whatsapp"); //what's app
+            mAllowedSources.add("com.facebook.orca"); //fb messenger
+            mAllowedSources.add("com.tencent.mm");//WeChat
+            mAllowedSources.add("com.google.android.apps.messaging"); //google Messages
+            Log.d(TAG, "No saved data. Saving allowed_apps now");
+            saveSettings();
+        }
+        Log.d(TAG, "allowed app:" + mAllowedSources.toString());
+    }
+
+    private boolean getNonASCIIOnly() {
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+        return preferences.getBoolean("nonascii", false);
+    }
+
+    private void saveSettings() {
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+        SharedPreferences.Editor editor = preferences.edit();
+        editor.putStringSet("allowed_apps", mAllowedSources);
+        Log.d(TAG, "saving allowed app:" + mAllowedSources.toString());
+        editor.apply();
+    }
+
     @Override
     public void onCreate() {
         super.onCreate();
         serviceReceiver = new MessagePngServiceReceiver();
         IntentFilter filter = new IntentFilter();
-        filter.addAction("au.idv.markkuo.garmin.picnotify.NOTIFICATION_LISTENER_SERVICE");
+        filter.addAction("au.idv.markkuo.android.apps.messagespng.NOTIFICATION_LISTENER_SERVICE");
         registerReceiver(serviceReceiver, filter);
 
-        //listApps();
-
         mNotifications = new ArrayList<>();
-        mAllowedSources = new HashSet<>();
 
-        // allowing hangout and LINE for now TODO: add more and make it configurable
-        mAllowedSources.add("com.google.android.talk");//hangout
-        mAllowedSources.add("jp.naver.line.android");//Line
-        mAllowedSources.add("com.whatsapp"); //what's app
-        mAllowedSources.add("com.facebook.orca"); //fb messenger
-        mAllowedSources.add("com.tencent.mm");//WeChat
-        mAllowedSources.add("com.google.android.gm"); //GMail
-        mAllowedSources.add("com.google.android.apps.messaging"); //google Messages
+        loadAllowedApps();
 
         // initialise CIQ
         mConnectIQ = ConnectIQ.getInstance(this, ConnectIQ.IQConnectType.WIRELESS);
@@ -389,25 +413,33 @@ public class MessagesPngService extends NotificationListenerService {
             Log.d(TAG, "===> Ignore Old notification at " + sbn.getNotification().when + " Last:" + lastWhen);
             return;
         }
+        // filter message content based on if it contains non-ascii chars
+        boolean nonASCIIOnly = getNonASCIIOnly();
+        String notificationText = getNotificationText(sbn);
+        if (nonASCIIOnly && isPureAscii(notificationText)) {
+            Log.d(TAG, "===> Ignore pure ASCII notification:" + notificationText);
+            return;
+        }
+
         lastNotificationWhen.put(sbn.getKey(), sbn.getNotification().when);
 
         for (int i = 0; i < mNotifications.size(); i++) {
             WatchNotification n = mNotifications.get(i);
             if (n.key.equals(sbn.getKey()) && n.title.equals(getNotificationTitle(sbn))) {
                 // add to existing
-                n.appendMessage(getNotificationText(sbn));
+                n.appendMessage(notificationText);
                 // move this to queue start
                 mNotifications.add(0, mNotifications.remove(i));
-                Log.d(TAG, "[append] " + getNotificationText(sbn) + "(" + sbn.getPackageName() + ")");
+                Log.d(TAG, "[append] " + notificationText + "(" + sbn.getPackageName() + ")");
                 Log.d(TAG, "==== " + sbn.toString());
                 lastUpdatedTS = System.currentTimeMillis();
                 return;
             }
         }
         // doesn't exists, let's add to the beginning of the list
-        Log.d(TAG, "[add] " + sbn.getNotification().tickerText + "\t" + getNotificationText(sbn) + "(" + sbn.getPackageName() + ")");
-        mNotifications.add(0, new WatchNotification(sbn.getKey(), getNotificationTitle(sbn),
-                getNotificationText(sbn), getAppName(sbn.getPackageName()),
+        Log.d(TAG, "[add] " + sbn.getNotification().tickerText + "\t" + notificationText + "(" + sbn.getPackageName() + ")");
+        mNotifications.add(0, new WatchNotification(getApplicationContext(), sbn.getKey(), getNotificationTitle(sbn),
+                notificationText, getAppName(sbn.getPackageName()),
                 sbn.getNotification().getSmallIcon()));
         lastUpdatedTS = System.currentTimeMillis();
     }
@@ -516,24 +548,29 @@ public class MessagesPngService extends NotificationListenerService {
 
     private class MessagePngServiceReceiver extends BroadcastReceiver{
 
-        // TODO: isn't implemented
         @Override
         public void onReceive(Context context, Intent intent) {
-            // not used for now
-
-            if(intent.getStringExtra("command").equals("clearall")){
-                MessagesPngService.this.cancelAllNotifications();
-            }
-            else if(intent.getStringExtra("command").equals("list")){
-                if (!connected) {
-                    Log.e(TAG, "Listener not connected to manager!");
-                    return;
+            String command = intent.getStringExtra("command");
+            if(command.equals("addApp")) {
+                //MessagesPngService.this.cancelAllNotifications();
+                String packageName = intent.getStringExtra("app");
+                if (!packageName.equals("")) {
+                    mAllowedSources.add(packageName);
+                    Log.d(TAG, "adding " + packageName + " to allowed sources");
+                    saveSettings();
                 }
-
-                for (StatusBarNotification sbn : MessagesPngService.this.getActiveNotifications()) {
-                    Log.i(TAG, "notification from:" + sbn.getPackageName());
+            } else if (command.equals("removeApp")) {
+                String packageName = intent.getStringExtra("app");
+                if (!packageName.equals("")) {
+                    mAllowedSources.remove(packageName);
+                    Log.d(TAG, "removing " + packageName + " from allowed sources");
+                    saveSettings();
                 }
+            } else if (command.equals("setTextSize")) {
+                int size = intent.getIntExtra("textsize", 22);
+                saveSettings();
             }
+            //TODO: add more
         }
     }
 
@@ -608,6 +645,17 @@ public class MessagesPngService extends NotificationListenerService {
                             createErrorJSONResponse("unable to create response json").toString());
                 }
                 return new NanoHTTPD.Response(Response.Status.OK, "application/json", json.toString());
+            }
+
+            //TODO: testing only, move to the end
+            if (method == Method.GET && uri.startsWith("/icons/")) {
+                if (mNotifications.size() > 0) {
+                    Bitmap bitmap = mNotifications.get(0).getIcon();
+                    if (bitmap != null)
+                        return new NanoHTTPD.Response(Response.Status.OK, "image/png", bitmapToInputStreamUncompressed(bitmap));
+                }
+                return new NanoHTTPD.Response(Response.Status.OK, "image/png",
+                        bitmapToInputStream(createBitmapFromText("No Icon")));
             }
 
             // all other endpoints needs sessionId, so let's check it now
@@ -750,6 +798,8 @@ public class MessagesPngService extends NotificationListenerService {
                 return new NanoHTTPD.Response(Response.Status.BAD_REQUEST, "application/json",
                         createErrorJSONResponse("unknown id").toString());
             }
+
+
 
             Log.e(TAG, "Forbidding " + uri + " (remote:" + session.getHeaders().get("remote-addr") + ")");
             return new NanoHTTPD.Response(Response.Status.FORBIDDEN, "application/json",

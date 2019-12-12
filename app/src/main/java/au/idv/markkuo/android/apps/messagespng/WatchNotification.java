@@ -1,10 +1,15 @@
 package au.idv.markkuo.android.apps.messagespng;
 
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Rect;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.Icon;
+import android.preference.PreferenceManager;
 import android.text.Layout;
 import android.text.StaticLayout;
 import android.text.TextPaint;
@@ -18,26 +23,32 @@ import java.util.Vector;
 // abstraction of notification here
 public class WatchNotification {
     private final String TAG = this.getClass().getSimpleName();
-    private static final int defaultTextSize = 20;
+    private static final int defaultTextSize = 24; //24 is better for F6pro, 20 is fine on vivoactive 4s
     private Bitmap overviewBitmap;
     private Vector<Bitmap> pageBitmaps;
     private static int width = 260, height = 260;
+    private Context context;
+    private Vector<String> msg;    //android.text
+    private String appName; //
+    private Icon icon;      //Notification.getSmallIcon()
 
     String id;      //random generated uuid for indexing
     String key;     //Notification.getKey()
     String title;   //android.title
 
-    private Vector<String> msg;    //android.text
-    private String appName; //
-    private Icon icon;      //Notification.getSmallIcon()
-
-    public static void setDimesion(int watchWidth, int watchHeight) {
+    static void setDimesion(int watchWidth, int watchHeight) {
         width = watchWidth;
         height = watchHeight;
     }
 
-    WatchNotification(String key, String title, String text, String appName, Icon icon) {
+    private int getTextSize() {
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context.getApplicationContext());
+        return Integer.parseInt(preferences.getString("textsize", Integer.toString(defaultTextSize)));
+    }
+
+    WatchNotification(Context context, String key, String title, String text, String appName, Icon icon) {
         pageBitmaps = new Vector<>();
+        this.context = context;
         this.id = UUID.randomUUID().toString();
         this.key = key;
         this.title = title;
@@ -46,6 +57,7 @@ public class WatchNotification {
         this.icon = icon;
         appendMessage(text);
     }
+
     public String toString() {
         StringBuilder sb = new StringBuilder();
         sb.append("[").append(appName).append("]\n").append(title);
@@ -75,6 +87,35 @@ public class WatchNotification {
         // re-build bitmap when we have ever built it
         if (pageBitmaps.size() > 0)
             _buildBitmaps();
+    }
+
+    private static Bitmap drawableToBitmap(Drawable drawable) {
+        Bitmap bitmap = null;
+
+        if (drawable instanceof BitmapDrawable) {
+            BitmapDrawable bitmapDrawable = (BitmapDrawable) drawable;
+            if (bitmapDrawable.getBitmap() != null) {
+                return bitmapDrawable.getBitmap();
+            }
+        }
+
+        if (drawable.getIntrinsicWidth() <= 0 || drawable.getIntrinsicHeight() <= 0) {
+            bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888); // Single color bitmap will be created of 1x1 pixel
+        } else {
+            bitmap = Bitmap.createBitmap(drawable.getIntrinsicWidth(), drawable.getIntrinsicHeight(), Bitmap.Config.ARGB_8888);
+        }
+
+        Canvas canvas = new Canvas(bitmap);
+        drawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
+        drawable.draw(canvas);
+        return bitmap;
+    }
+
+    Bitmap getIcon() {
+        if (icon != null) {
+            return drawableToBitmap(icon.loadDrawable(context));
+        }
+        return null;
     }
 
     Bitmap getOverviewBitmap() {
@@ -108,7 +149,7 @@ public class WatchNotification {
     private void _buildBitmaps() {
         pageBitmaps.clear();
         //_buildBitmaps(toString(), width, height);
-        int maxLines = height / (defaultTextSize + 2) - 1; //TODO: i don't know the spacing, just use +2
+        int maxLines = height / (getTextSize() + 2) - 1; //TODO: i don't know the spacing, just use +2
         Log.d(TAG, "building detail message bitmaps...");
         String text = toString();
         while (true) {
@@ -126,12 +167,11 @@ public class WatchNotification {
     private Pair<Bitmap, Integer> _doTextLayout(String text, int width, int height, int maxLines) {
         Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
-        final int textSize = 20;
 
         TextPaint textPaint=new TextPaint();
         //textPaint.setTextAlign(TextPaint.Align.CENTER);
         textPaint.setColor(Color.WHITE);
-        textPaint.setTextSize(textSize);
+        textPaint.setTextSize(getTextSize());
 
         Rect rect = new Rect();
         textPaint.getTextBounds(text, 0, text.length(), rect);

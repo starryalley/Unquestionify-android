@@ -1,12 +1,5 @@
-/**
- * Copyright (C) 2015 Garmin International Ltd.
- * Subject to Garmin SDK License Agreement and Wearables Application Developer Agreement.
- */
 package au.idv.markkuo.android.apps.messagespng;
 
-import java.util.List;
-
-import android.app.AlertDialog;
 import android.app.Dialog;
 import android.app.ListActivity;
 import android.content.BroadcastReceiver;
@@ -29,19 +22,23 @@ import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.appcompat.app.AlertDialog;
+
 import com.garmin.android.connectiq.ConnectIQ;
 import com.garmin.android.connectiq.ConnectIQ.IQApplicationEventListener;
 import com.garmin.android.connectiq.ConnectIQ.IQApplicationInfoListener;
 import com.garmin.android.connectiq.ConnectIQ.IQDeviceEventListener;
 import com.garmin.android.connectiq.ConnectIQ.IQMessageStatus;
-import com.garmin.android.connectiq.ConnectIQ.IQSendMessageListener;
 import com.garmin.android.connectiq.ConnectIQ.IQOpenApplicationListener;
 import com.garmin.android.connectiq.ConnectIQ.IQOpenApplicationStatus;
+import com.garmin.android.connectiq.ConnectIQ.IQSendMessageListener;
 import com.garmin.android.connectiq.IQApp;
 import com.garmin.android.connectiq.IQDevice;
 import com.garmin.android.connectiq.IQDevice.IQDeviceStatus;
 import com.garmin.android.connectiq.exception.InvalidStateException;
 import com.garmin.android.connectiq.exception.ServiceUnavailableException;
+
+import java.util.List;
 
 public class DeviceActivity extends ListActivity implements View.OnClickListener {
 

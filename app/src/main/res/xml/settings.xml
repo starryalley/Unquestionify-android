@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:android="http://schemas.android.com/apk/res/android" >
+    <PreferenceCategory
+        app:key="notifications_category"
+        app:title="Message Generation">
+
+        <SwitchPreferenceCompat
+            app:key="nonascii"
+            app:title="Non-ASCII messages only"/>
+
+        <EditTextPreference
+            app:key="textsize"
+            app:title="Text Height on watch (pixels)"
+            app:useSimpleSummaryProvider="true" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        app:key="other_category"
+        app:title="Developer">
+
+        <Preference
+            app:key="feedback"
+            app:title="Send feedback"
+            app:summary="Report issues or suggest new features">
+            <intent
+                android:action="android.intent.action.VIEW"
+                android:data="mailto:starryalley@gmail.com?subject=Suggestion to Messages.png App" />
+        </Preference>
+    </PreferenceCategory>
+
+</PreferenceScreen>

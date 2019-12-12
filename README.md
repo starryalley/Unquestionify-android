@@ -14,7 +14,7 @@ See [Connect IQ Watchapp](https://github.com/starryalley/Messages.png)
 
 ## Functions
 
-This Android app creats a Service running in the background, monitoring selected apps' notifications. It exposes a semi-restful http service on 127.0.0.1 (localhost) for whatapp to access. (The builtin garmin communication module is buggy and can't be used reliably).
+This Android app creats a Service running in the background, monitoring selected apps' notifications. It exposes a semi-restful http service on 127.0.0.1 (localhost) for whatapp to access. (The builtin garmin communication module is buggy and can't be used reliably. [See bug report here](https://forums.garmin.com/developer/connect-iq/i/bug-reports/failure_during_transfer)).
 
 Currently no UI is built in this app and I plan to add:
 * configurable notifciation source (which app's notification to send through)
