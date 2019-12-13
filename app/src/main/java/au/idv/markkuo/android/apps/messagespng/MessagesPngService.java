@@ -74,23 +74,32 @@ public class MessagesPngService extends NotificationListenerService {
 
     private String sessionId;
 
+    // for statistics
+    private int startAppCount = 0;
+    private int sessionCount = 0;
+    private int promptShownCount = 0;
+    private int promptNotShownCount = 0;
+    private int notificationQueryCount = 0;
+    private int bitmapQueryCount = 0;
+    private int notificationDetailQueryCount = 0;
+    private int dismissQueryCount = 0;
+    private int forbiddenCount = 0;
+    private int totalNotificationCount = 0;
+    private Handler statusReportHandler;
+
     // how many pixels to enlarge the square inside the circle
     // 40 is better but a long text on F6Pro can result in a 2500-byte png which is too big
     private static final int defaultSquareWidthOffset = 20;
-
-    private ConnectIQ.IQDeviceEventListener mCIQDeviceEventListener = new ConnectIQ.IQDeviceEventListener() {
-
-        @Override
-        public void onDeviceStatusChanged(IQDevice device, IQDevice.IQDeviceStatus status) {
-            Log.i(TAG, "CIQ Dev:" + device + " Status:" + status);
-        }
-
-    };
 
     private ConnectIQ.IQOpenApplicationListener mCIQOpenAppListener = new ConnectIQ.IQOpenApplicationListener() {
         @Override
         public void onOpenApplicationResponse(IQDevice device, IQApp app, ConnectIQ.IQOpenApplicationStatus status) {
             Log.i(TAG, "CIQ App status:" + status.name());
+            if (status == ConnectIQ.IQOpenApplicationStatus.PROMPT_SHOWN_ON_DEVICE)
+                promptShownCount++;
+            else if (status == ConnectIQ.IQOpenApplicationStatus.PROMPT_NOT_SHOWN_ON_DEVICE)
+                promptNotShownCount++;
+
             // clear the flag
             mOpenAppRequestInProgress = false;
         }
@@ -239,7 +248,6 @@ public class MessagesPngService extends NotificationListenerService {
 
         writer.copyChunksFrom(reader.getChunksList(), ChunkCopyBehaviour.COPY_ALL_SAFE);
 
-        int[] buf;
         ImageLineInt linew = new ImageLineInt(imiw);
         int channels = reader.imgInfo.channels;
         for (int row = 0; row < reader.imgInfo.rows; row++) {
@@ -258,7 +266,7 @@ public class MessagesPngService extends NotificationListenerService {
         // cleanup
         reader.end();
         writer.end();
-        Log.i(TAG, "Compressed PNG (" + reader.imgInfo.cols + "x" + reader.imgInfo.rows + "): " + bitmap.getByteCount() + " => " + baos.toByteArray().length + " bytes");
+        Log.d(TAG, "Compressed PNG (" + reader.imgInfo.cols + "x" + reader.imgInfo.rows + "): " + bitmap.getByteCount() + " => " + baos.toByteArray().length + " bytes");
         //bitmap.recycle();
         return new ByteArrayInputStream(baos.toByteArray());
     }
@@ -297,7 +305,7 @@ public class MessagesPngService extends NotificationListenerService {
             mAllowedSources.add("com.tencent.mm");//WeChat
             mAllowedSources.add("com.google.android.apps.messaging"); //google Messages
             Log.d(TAG, "No saved data. Saving allowed_apps now");
-            saveSettings();
+            saveAllowedSources();
         }
         Log.d(TAG, "allowed app:" + mAllowedSources.toString());
     }
@@ -307,11 +315,10 @@ public class MessagesPngService extends NotificationListenerService {
         return preferences.getBoolean("nonascii", false);
     }
 
-    private void saveSettings() {
+    private void saveAllowedSources() {
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
         SharedPreferences.Editor editor = preferences.edit();
         editor.putStringSet("allowed_apps", mAllowedSources);
-        Log.d(TAG, "saving allowed app:" + mAllowedSources.toString());
         editor.apply();
     }
 
@@ -367,7 +374,6 @@ public class MessagesPngService extends NotificationListenerService {
     @Override
     public void onDestroy() {
         try {
-            mConnectIQ.unregisterAllForEvents();
             mConnectIQ.shutdown(this);
         } catch (InvalidStateException e) {
             Log.w(TAG, "Cannot shutdown CIQ:" + e);
@@ -386,7 +392,6 @@ public class MessagesPngService extends NotificationListenerService {
                 if (devices.size() > 0) {
                     mCIQDevice = devices.get(0);
                     Log.i(TAG, "CIQ Device:" + mCIQDevice.getFriendlyName());
-                    mConnectIQ.registerForDeviceEvents(mCIQDevice, mCIQDeviceEventListener);
                 }
             }
         } catch (InvalidStateException e) {
@@ -403,26 +408,26 @@ public class MessagesPngService extends NotificationListenerService {
     }
 
     private void addNotification(StatusBarNotification sbn) {
-        // ignore group summary message
-        if ((sbn.getNotification().flags & Notification.FLAG_GROUP_SUMMARY) != 0) {
+        // ignore group summary and local-only messages
+        if ((sbn.getNotification().flags & Notification.FLAG_GROUP_SUMMARY) != 0 ||
+                (sbn.getNotification().flags & Notification.FLAG_LOCAL_ONLY) != 0) {
             //Log.d(TAG, "[ignore]" + sbn.getNotification().tickerText + "\t" + getNotificationText(sbn) + "(" + sbn.getPackageName() + ")");
             return;
         }
         Long lastWhen = lastNotificationWhen.get(sbn.getKey());
-        if(lastWhen != null && lastWhen >= sbn.getNotification().when){
-            Log.d(TAG, "===> Ignore Old notification at " + sbn.getNotification().when + " Last:" + lastWhen);
+        if(lastWhen != null && lastWhen >= sbn.getNotification().when)
             return;
-        }
+
         // filter message content based on if it contains non-ascii chars
         boolean nonASCIIOnly = getNonASCIIOnly();
         String notificationText = getNotificationText(sbn);
         if (nonASCIIOnly && isPureAscii(notificationText)) {
-            Log.d(TAG, "===> Ignore pure ASCII notification:" + notificationText);
+            Log.d(TAG, "[ignore] [" + sbn.getPackageName() + "]:" + sbn.getNotification().tickerText + " (flag:" + sbn.getNotification().flags + ")");
             return;
         }
 
         lastNotificationWhen.put(sbn.getKey(), sbn.getNotification().when);
-
+        totalNotificationCount++;
         for (int i = 0; i < mNotifications.size(); i++) {
             WatchNotification n = mNotifications.get(i);
             if (n.key.equals(sbn.getKey()) && n.title.equals(getNotificationTitle(sbn))) {
@@ -430,18 +435,20 @@ public class MessagesPngService extends NotificationListenerService {
                 n.appendMessage(notificationText);
                 // move this to queue start
                 mNotifications.add(0, mNotifications.remove(i));
-                Log.d(TAG, "[append] " + notificationText + "(" + sbn.getPackageName() + ")");
+                Log.d(TAG, "[append] [" + sbn.getPackageName() + "]:" + sbn.getNotification().tickerText + " (flag:" + sbn.getNotification().flags + ")");
                 Log.d(TAG, "==== " + sbn.toString());
                 lastUpdatedTS = System.currentTimeMillis();
+                startWatchApp();
                 return;
             }
         }
         // doesn't exists, let's add to the beginning of the list
-        Log.d(TAG, "[add] " + sbn.getNotification().tickerText + "\t" + notificationText + "(" + sbn.getPackageName() + ")");
+        Log.d(TAG, "[add] [" + sbn.getPackageName() + "]:" + sbn.getNotification().tickerText + " (flag:" + sbn.getNotification().flags + ")");
         mNotifications.add(0, new WatchNotification(getApplicationContext(), sbn.getKey(), getNotificationTitle(sbn),
                 notificationText, getAppName(sbn.getPackageName()),
                 sbn.getNotification().getSmallIcon()));
         lastUpdatedTS = System.currentTimeMillis();
+        startWatchApp();
     }
 
     private void removeNotification(StatusBarNotification sbn) {
@@ -450,7 +457,7 @@ public class MessagesPngService extends NotificationListenerService {
             if (n.key.equals(sbn.getKey()) && n.title.equals(getNotificationTitle(sbn))) {
                 mNotifications.remove(i);
                 lastNotificationWhen.remove(n.key);
-                Log.d(TAG, "[remove] " + sbn.getNotification().tickerText + "\t" + getNotificationText(sbn) + "(" + sbn.getPackageName() + ")");
+                Log.d(TAG, "[remove] [" + sbn.getPackageName() + "]:" + sbn.getNotification().tickerText + " (flag:" + sbn.getNotification().flags + ")");
                 lastUpdatedTS = System.currentTimeMillis();
             }
         }
@@ -458,6 +465,7 @@ public class MessagesPngService extends NotificationListenerService {
 
     @Override
     public void onNotificationPosted(StatusBarNotification sbn) {
+        super.onNotificationPosted(sbn);
         if (!mAllowedSources.contains(sbn.getPackageName())) {
             return;
         }
@@ -465,7 +473,7 @@ public class MessagesPngService extends NotificationListenerService {
         Log.d(TAG, "onNotificationPosted " + sbn.getNotification().tickerText + "\t" + getNotificationText(sbn) + "(" + sbn.getPackageName() + ")");
         // add this notification
         addNotification(sbn);
-        startWatchApp();
+
 
         /*
         // TODO: remove this
@@ -479,6 +487,7 @@ public class MessagesPngService extends NotificationListenerService {
 
     @Override
     public void onNotificationRemoved(StatusBarNotification sbn) {
+        super.onNotificationRemoved(sbn);
         if (mAllowedSources.contains(sbn.getPackageName())) {
             Log.d(TAG, "onNotificationRemoved " + sbn.getNotification().tickerText + "\t" + getNotificationText(sbn) + "(" + sbn.getPackageName() + ")");
             removeNotification(sbn);
@@ -522,7 +531,7 @@ public class MessagesPngService extends NotificationListenerService {
             return;
         mOpenAppRequestInProgress = true;
         Log.d(TAG, "starting watch app");
-
+        startAppCount++;
         final Handler handler = new Handler();
         handler.postDelayed(new Runnable() {
             @Override
@@ -546,6 +555,31 @@ public class MessagesPngService extends NotificationListenerService {
         }
     }
 
+    private void broadcastServiceStatus() {
+        JSONObject o = new JSONObject();
+        try {
+            o.put("Service Running", connected ? "Running" : "Stopped");
+            o.put("Starting Watchapp", startAppCount + " times");
+            o.put("Watchapp Prompt Shown", promptShownCount);
+            o.put("Watchapp Prompt Not Shown", promptNotShownCount);
+            o.put("Watchapp Use Count", sessionCount);
+            o.put("Notification Query Count", notificationQueryCount);
+            o.put("Detail Notification Query Count", notificationDetailQueryCount);
+            o.put("Total Bitmap Requested", bitmapQueryCount);
+            o.put("Notification Dismissal Count", dismissQueryCount);
+            o.put("Forbidden Requests", forbiddenCount);
+            o.put("Current Notification Count", mNotifications.size());
+            o.put("Total Notification Count", totalNotificationCount);
+        } catch (Exception e) {
+            Log.e(TAG, "Unable to create json object:" + e);
+        }
+        Log.v(TAG, "Broadcasting service status");
+        // send broadcast
+        Intent i = new Intent("au.idv.markkuo.android.apps.messagespng.NOTIFICATION_LISTENER_SERVICE_STATUS");
+        i.putExtra("service_status", o.toString());
+        sendBroadcast(i);
+    }
+
     private class MessagePngServiceReceiver extends BroadcastReceiver{
 
         @Override
@@ -557,18 +591,39 @@ public class MessagesPngService extends NotificationListenerService {
                 if (!packageName.equals("")) {
                     mAllowedSources.add(packageName);
                     Log.d(TAG, "adding " + packageName + " to allowed sources");
-                    saveSettings();
+                    saveAllowedSources();
                 }
             } else if (command.equals("removeApp")) {
                 String packageName = intent.getStringExtra("app");
                 if (!packageName.equals("")) {
                     mAllowedSources.remove(packageName);
                     Log.d(TAG, "removing " + packageName + " from allowed sources");
-                    saveSettings();
+                    saveAllowedSources();
                 }
             } else if (command.equals("setTextSize")) {
                 int size = intent.getIntExtra("textsize", 22);
-                saveSettings();
+                saveAllowedSources();
+            } else if (command.equals("startStatusReport")) {
+                if (statusReportHandler == null) {
+                    Log.d(TAG, "starting status report");
+                    broadcastServiceStatus();//do it now once
+                    // start a timer to send it every 10 sec
+                    statusReportHandler = new Handler();
+                    final int delay = 10 * 1000; //milliseconds
+                    statusReportHandler.postDelayed(new Runnable() {
+                        @Override
+                        public void run(){
+                            broadcastServiceStatus();
+                            statusReportHandler.postDelayed(this, delay);
+                        }
+                    }, delay);
+                }
+            } else if (command.equals("stopStatusReport")) {
+                if (statusReportHandler != null) {
+                    Log.d(TAG, "stopping status report");
+                    statusReportHandler.removeCallbacksAndMessages(null);
+                    statusReportHandler = null;
+                }
             }
             //TODO: add more
         }
@@ -599,6 +654,7 @@ public class MessagesPngService extends NotificationListenerService {
             // TODO: re-enable this check after development finishes
 //            if (!session.getHeaders().get("remote-addr").equals("127.0.0.1")) {
 //                Log.e(TAG, "forbidding connection other than localhost. Incoming address:" + session.getHeaders().get("remote-addr"));
+//                forbiddenCount++;
 //                return new NanoHTTPD.Response(Response.Status.FORBIDDEN, MIME_PLAINTEXT, "SERVICE FORBIDDEN");
 //            }
 
@@ -635,6 +691,7 @@ public class MessagesPngService extends NotificationListenerService {
                 // update sessionId
                 sessionId = UUID.randomUUID().toString();
                 Log.i(TAG, "Session started");
+                sessionCount++;
                 // create JSON
                 JSONObject json = new JSONObject();
                 try {
@@ -660,10 +717,12 @@ public class MessagesPngService extends NotificationListenerService {
 
             // all other endpoints needs sessionId, so let's check it now
             if (TextUtils.isEmpty(sessionId)) {
+                forbiddenCount++;
                 Log.e(TAG, "/request_session should be requested first!");
                 return new NanoHTTPD.Response(Response.Status.FORBIDDEN, "application/json",
                         createErrorJSONResponse("No Permission").toString());
             } else if (params.get("session") == null || !params.get("session").equals(sessionId)) {
+                forbiddenCount++;
                 Log.e(TAG, "session incorrect! Permission denied");
                 return new NanoHTTPD.Response(Response.Status.FORBIDDEN, "application/json",
                         createErrorJSONResponse("Forbidden").toString());
@@ -672,6 +731,7 @@ public class MessagesPngService extends NotificationListenerService {
             // ok, we have permission. Let's proceed
 
             if (method == Method.GET && uri.equals("/notifications")) {
+                notificationQueryCount++;
                 // create JSON
                 JSONObject json = new JSONObject();
                 try {
@@ -702,7 +762,7 @@ public class MessagesPngService extends NotificationListenerService {
                 if (params.get("page") != null)
                     page = Integer.parseInt(params.get("page"));
                 Log.d(TAG, "/notifications requested with page:" + page);
-
+                bitmapQueryCount++;
                 String id = uri.substring("/notifications/".length());
                 if (mNotifications.size() == 0) {
                     return new NanoHTTPD.Response(Response.Status.OK, "image/png",
@@ -744,7 +804,7 @@ public class MessagesPngService extends NotificationListenerService {
                     return new NanoHTTPD.Response(Response.Status.OK, "application/json",
                             createErrorJSONResponse("Unavailable").toString());
                 }
-
+                notificationDetailQueryCount++;
                 String id = uri.substring("/notifications_details/".length());
                 // do cache
                 WatchNotification notification = null;
@@ -775,6 +835,7 @@ public class MessagesPngService extends NotificationListenerService {
                 String id = "";
                 if (uri.length() > "/notifications/".length())
                     id = uri.substring("/notifications/".length());
+                dismissQueryCount++;
                 boolean all = id.equals("");
                 for (final WatchNotification n : mNotifications) {
                     if (all) {
@@ -799,8 +860,7 @@ public class MessagesPngService extends NotificationListenerService {
                         createErrorJSONResponse("unknown id").toString());
             }
 
-
-
+            forbiddenCount++;
             Log.e(TAG, "Forbidding " + uri + " (remote:" + session.getHeaders().get("remote-addr") + ")");
             return new NanoHTTPD.Response(Response.Status.FORBIDDEN, "application/json",
                     createErrorJSONResponse("forbidden").toString());

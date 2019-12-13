@@ -1,12 +1,9 @@
-/**
- * Copyright (C) 2015 Garmin International Ltd.
- * Subject to Garmin SDK License Agreement and Wearables Application Developer Agreement.
- */
 package au.idv.markkuo.android.apps.messagespng.adapter;
 
 import java.util.List;
 
 import android.content.Context;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -16,8 +13,10 @@ import android.widget.TextView;
 import com.garmin.android.connectiq.IQDevice;
 import com.garmin.android.connectiq.IQDevice.IQDeviceStatus;
 
-public class IQDeviceAdapter extends ArrayAdapter<IQDevice> {
+import au.idv.markkuo.android.apps.messagespng.MainActivity;
 
+public class IQDeviceAdapter extends ArrayAdapter<IQDevice> {
+    private final String TAG = getClass().getSimpleName();
     private LayoutInflater mInflater;
 
     public IQDeviceAdapter(Context context) {
@@ -47,8 +46,8 @@ public class IQDeviceAdapter extends ArrayAdapter<IQDevice> {
     }
 
     public synchronized void updateDeviceStatus(IQDevice device, IQDeviceStatus status) {
-
         int numItems = this.getCount();
+        Log.d(TAG, "device:" + device + " status changed:" + status.name());
         for(int i = 0; i < numItems; i++) {
             IQDevice local = getItem(i);
             if (local.getDeviceIdentifier() == device.getDeviceIdentifier()) {

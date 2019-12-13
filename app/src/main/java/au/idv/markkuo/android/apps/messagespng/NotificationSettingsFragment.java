@@ -16,7 +16,7 @@ public class NotificationSettingsFragment extends PreferenceFragmentCompat {
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
         setPreferencesFromResource(R.xml.settings, rootKey);
-        
+
         final SwitchPreferenceCompat nonAscIIPreference = findPreference("nonascii");
         if (nonAscIIPreference != null) {
             nonAscIIPreference.setOnPreferenceChangeListener(new Preference.OnPreferenceChangeListener() {

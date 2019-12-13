@@ -7,15 +7,31 @@
     android:paddingTop="@dimen/activity_vertical_margin"
     tools:context="au.idv.markkuo.android.apps.messagespng.MainActivity" >
 
+    <TextView
+        android:id="@+id/connected_device"
+        android:text="@string/connected_device"
+        android:layout_alignParentTop="true"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content" />
+
     <ListView
-        android:id="@android:id/list"
+        android:id="@+id/deviceList"
+        android:layout_below="@+id/connected_device"
+        android:layout_marginBottom="10sp"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="wrap_content" />
 
     <TextView
-        android:id="@android:id/empty"
+        android:id="@+id/statisticsText"
+        android:text="Service Statistics"
+        android:layout_below="@+id/deviceList"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_centerInParent="true" />
+        android:layout_height="wrap_content" />
+
+    <ListView
+        android:id="@+id/statisticsList"
+        android:layout_below="@+id/statisticsText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
 
 </RelativeLayout>

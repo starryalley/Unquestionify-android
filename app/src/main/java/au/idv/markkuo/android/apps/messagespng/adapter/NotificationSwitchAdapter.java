@@ -30,7 +30,7 @@ public class NotificationSwitchAdapter extends ArrayAdapter<NotificationApp> {
     }
 
     public NotificationSwitchAdapter(NotificationListActivity activity) {
-        super(activity, R.layout.row_item);
+        super(activity, R.layout.app_notification_switch_row);
         this.checkedRows = new ArrayList<>();
         this.activity = activity;
     }
@@ -71,7 +71,7 @@ public class NotificationSwitchAdapter extends ArrayAdapter<NotificationApp> {
         if (convertView == null) {
             viewHolder = new ViewHolder();
             LayoutInflater inflater = LayoutInflater.from(getContext());
-            convertView = inflater.inflate(R.layout.row_item, parent, false);
+            convertView = inflater.inflate(R.layout.app_notification_switch_row, parent, false);
             viewHolder.appIcon = convertView.findViewById(R.id.appIcon);
             viewHolder.appName = convertView.findViewById(R.id.appName);
             viewHolder.appSwitch = convertView.findViewById(R.id.appSwitch);

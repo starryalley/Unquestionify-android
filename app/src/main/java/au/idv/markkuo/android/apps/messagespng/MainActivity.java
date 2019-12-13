@@ -1,16 +1,27 @@
 package au.idv.markkuo.android.apps.messagespng;
 
-import android.app.ListActivity;
+import android.app.Dialog;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.util.Log;
+import android.util.Pair;
 import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
 
+import android.view.ViewGroup;
+import android.view.Window;
+import android.widget.ImageView;
+import android.widget.ListView;
+import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -26,25 +37,33 @@ import com.garmin.android.connectiq.IQDevice.IQDeviceStatus;
 import com.garmin.android.connectiq.exception.InvalidStateException;
 import com.garmin.android.connectiq.exception.ServiceUnavailableException;
 
+import org.json.JSONObject;
+
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 import au.idv.markkuo.android.apps.messagespng.adapter.IQDeviceAdapter;
+import au.idv.markkuo.android.apps.messagespng.adapter.StatisticsAdapter;
 
 public class MainActivity extends AppCompatActivity {
-
     private ConnectIQ mConnectIQ;
-    private TextView mEmptyView;
-    //private ListView listView;
-    private IQDeviceAdapter mAdapter;
-    private boolean mSdkReady = false;
+    private ListView deviceListView;
+    private ListView statisticsListView;
+    private IQDeviceAdapter deviceAdapter;
+    private StatisticsAdapter statisticsAdapter;
+    private boolean mSdkReady = true; // assume it is ready since we have a service running doing the same thing
     private static final String TAG = MainActivity.class.getSimpleName();
     private boolean mPermissionAcquired = false;
+
+    private MainActivityReceiver receiver;
 
     private IQDeviceEventListener mDeviceEventListener = new IQDeviceEventListener() {
 
         @Override
         public void onDeviceStatusChanged(IQDevice device, IQDeviceStatus status) {
-            mAdapter.updateDeviceStatus(device, status);
+            MainActivity.this.deviceAdapter.updateDeviceStatus(device, status);
+            Log.i(TAG, "Device:" + device + " status changed:" + status);
         }
 
     };
@@ -53,14 +72,12 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public void onInitializeError(IQSdkErrorStatus errStatus) {
-            if( null != mEmptyView )
-                mEmptyView.setText(R.string.initialization_error + errStatus.name());
             mSdkReady = false;
         }
 
         @Override
         public void onSdkReady() {
-            loadDevices();
+            Log.d(TAG, "SDK ready");
             mSdkReady = true;
         }
 
@@ -76,35 +93,56 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        mAdapter = new IQDeviceAdapter(this);
-        //getListView().setAdapter(mAdapter);
+        deviceListView = findViewById(R.id.deviceList);
+        deviceAdapter = new IQDeviceAdapter(this);
+        deviceListView.setAdapter(deviceAdapter);
 
-        // Here we are specifying that we want to use a WIRELESS bluetooth connection.
-        // We could have just called getInstance() which would by default create a version
-        // for WIRELESS, unless we had previously gotten an instance passing TETHERED
-        // as the connection type.
-        //mConnectIQ = ConnectIQ.getInstance(this, IQConnectType.WIRELESS);// use TETHERED for CIQ simulator
+        statisticsListView = findViewById(R.id.statisticsList);
+        statisticsAdapter = new StatisticsAdapter(this);
+        statisticsListView.setAdapter(statisticsAdapter);
+
+        receiver = new MainActivityReceiver();
+        IntentFilter filter = new IntentFilter();
+        filter.addAction("au.idv.markkuo.android.apps.messagespng.NOTIFICATION_LISTENER_SERVICE_STATUS");
+        registerReceiver(receiver, filter);
+
+        mConnectIQ = ConnectIQ.getInstance();
 
         // Initialize the SDK
-        //mConnectIQ.initialize(this, true, mListener);
-
-        mEmptyView = (TextView)findViewById(android.R.id.empty);
+        mConnectIQ.initialize(this, true, mListener);
 
         // check notifications access permission
         String notificationListenerString = Settings.Secure.getString(this.getContentResolver(),"enabled_notification_listeners");
-        if (notificationListenerString == null || !notificationListenerString.contains(getPackageName()))
-        {
+        if (notificationListenerString == null || !notificationListenerString.contains(getPackageName())) {
             // notification access has not been acquired yet
             openPermissionDialog();
-        }else{
+        } else {
             // has access to the notifications
             mPermissionAcquired = true;
         }
+    }
 
+    private void showImage(Bitmap bitmap) {
+        Dialog builder = new Dialog(this);
+        builder.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        builder.getWindow().setBackgroundDrawable(
+                new ColorDrawable(android.graphics.Color.TRANSPARENT));
+        builder.setOnDismissListener(new DialogInterface.OnDismissListener() {
+            @Override
+            public void onDismiss(DialogInterface dialogInterface) {
+                //nothing;
+            }
+        });
+
+        ImageView imageView = new ImageView(this);
+        imageView.setImageBitmap(bitmap);
+        builder.addContentView(imageView, new RelativeLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        builder.show();
     }
 
     private void openPermissionDialog() {
-
         AlertDialog alertDialog = new AlertDialog.Builder(this).create();
 
         // Set Custom Title
@@ -144,23 +182,48 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
+    public void onPause() {
+        super.onPause();
+        try {
+            List<IQDevice> devices = mConnectIQ.getKnownDevices();
+            if (devices != null) {
+                deviceAdapter.setDevices(devices);
+                for (IQDevice device : devices) {
+                    mConnectIQ.unregisterForDeviceEvents(device);
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "unregistering failed:" + e);
+        }
+
+        Intent intent = new Intent();
+        intent.setAction("au.idv.markkuo.android.apps.messagespng.NOTIFICATION_LISTENER_SERVICE");
+        intent.putExtra("command", "stopStatusReport");
+        sendBroadcast(intent);
+    }
+
+    @Override
     public void onResume() {
         super.onResume();
 
         if (mSdkReady)
             loadDevices();
+
+        Intent intent = new Intent();
+        intent.setAction("au.idv.markkuo.android.apps.messagespng.NOTIFICATION_LISTENER_SERVICE");
+        intent.putExtra("command", "startStatusReport");
+        sendBroadcast(intent);
     }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
-//        try {
-//            mConnectIQ.unregisterAllForEvents();
-//            mConnectIQ.shutdown(this);
-//        } catch (InvalidStateException e) {
-//            // This is usually because the SDK was already shut down
-//            // so no worries.
-//        }
+        try {
+            mConnectIQ.unregisterAllForEvents();
+            mConnectIQ.shutdown(this);
+        } catch (InvalidStateException e) {
+            // ignoring
+        }
     }
 
     @Override
@@ -174,7 +237,6 @@ public class MainActivity extends AppCompatActivity {
         int id = item.getItemId();
         if (id == R.id.select_notify_apps) {
             Intent intent = new Intent(this, NotificationListActivity.class);
-            //intent.putExtra(DeviceActivity.IQDEVICE, device);
             startActivity(intent);
             return true;
         } else if (id == R.id.settings) {
@@ -184,34 +246,18 @@ public class MainActivity extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 
-    /*
-    @Override
-    public void onListItemClick(ListView l, View v, int position, long id) {
-        IQDevice device = mAdapter.getItem(position);
-
-        Intent intent = new Intent(this, DeviceActivity.class);
-        intent.putExtra(DeviceActivity.IQDEVICE, device);
-        startActivity(intent);
-    }
-
-     */
-
     public void loadDevices() {
         // Retrieve the list of known devices
+        Log.d(TAG, "LoadDevices...");
         try {
             List<IQDevice> devices = mConnectIQ.getKnownDevices();
-
             if (devices != null) {
-                mAdapter.setDevices(devices);
-
-                // Let's register for device status updates.  By doing so we will
-                // automatically get a status update for each device so we do not
-                // need to call getStatus()
+                deviceAdapter.setDevices(devices);
                 for (IQDevice device : devices) {
                     mConnectIQ.registerForDeviceEvents(device, mDeviceEventListener);
+                    Log.d(TAG, "device:" + device);
                 }
             }
-
         } catch (InvalidStateException e) {
             // This generally means you forgot to call initialize(), but since
             // we are in the callback for initialize(), this should never happen
@@ -221,8 +267,31 @@ public class MainActivity extends AppCompatActivity {
             // to the ConnectIQ service running within Garmin Connect Mobile.  This
             // could be because Garmin Connect Mobile is not installed or needs to
             // be upgraded.
-            if(mEmptyView != null)
-                mEmptyView.setText(R.string.service_unavailable);
+            Log.e(TAG, "service unavailable:" + e);
+        }
+    }
+
+    private class MainActivityReceiver extends BroadcastReceiver {
+
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String statusString = intent.getStringExtra("service_status");
+            try {
+                JSONObject o = new JSONObject(statusString);
+                Log.v(TAG, "service status:" + o);
+                List<Pair<String, String>> statistics = new ArrayList<>();
+                Iterator<String> keys = o.keys();
+
+                while(keys.hasNext()) {
+                    String key = keys.next();
+                    String value = o.get(key).toString();
+                    statistics.add(new Pair<>(key, value));
+                }
+                statisticsAdapter.setStatistics(statistics);
+            } catch (Exception e) {
+                Log.e(TAG, "error parsing json service_status:" + e);
+            }
+
         }
     }
 }
