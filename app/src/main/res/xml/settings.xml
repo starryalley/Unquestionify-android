@@ -14,7 +14,15 @@
             app:key="textsize"
             app:title="Text Height on watch (pixels)"
             app:useSimpleSummaryProvider="true" />
+    </PreferenceCategory>
 
+    <PreferenceCategory
+        app:key="notifications_category"
+        app:title="Statistics">
+
+        <Preference
+            app:key="resetStat"
+            app:title="Reset Statistics"/>
     </PreferenceCategory>
 
     <PreferenceCategory
@@ -30,5 +38,4 @@
                 android:data="mailto:starryalley@gmail.com?subject=Suggestion to Messages.png App" />
         </Preference>
     </PreferenceCategory>
-
 </PreferenceScreen>

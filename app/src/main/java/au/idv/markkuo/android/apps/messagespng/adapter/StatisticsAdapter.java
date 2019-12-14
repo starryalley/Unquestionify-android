@@ -1,7 +1,6 @@
 package au.idv.markkuo.android.apps.messagespng.adapter;
 
 import android.content.Context;
-import android.util.Log;
 import android.util.Pair;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -9,20 +8,14 @@ import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.TextView;
 
-import com.garmin.android.connectiq.IQDevice;
-import com.garmin.android.connectiq.IQDevice.IQDeviceStatus;
-
 import java.util.List;
 
 import au.idv.markkuo.android.apps.messagespng.R;
 
 public class StatisticsAdapter extends ArrayAdapter<Pair<String, String>> {
-    private final String TAG = getClass().getSimpleName();
 
     public StatisticsAdapter(Context context) {
         super(context, R.layout.statistic_row);
-
-        //mInflater = (LayoutInflater)context.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
     }
 
     @Override

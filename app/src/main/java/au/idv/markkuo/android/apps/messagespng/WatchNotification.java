@@ -20,7 +20,7 @@ import android.util.Pair;
 import java.util.UUID;
 import java.util.Vector;
 
-// abstraction of notification here
+// abstraction of a notification
 public class WatchNotification {
     private final String TAG = this.getClass().getSimpleName();
     private static final int defaultTextSize = 24; //24 is better for F6pro, 20 is fine on vivoactive 4s
@@ -28,22 +28,17 @@ public class WatchNotification {
     private Vector<Bitmap> pageBitmaps;
     private static int width = 260, height = 260;
     private Context context;
-    private Vector<String> msg;    //android.text
-    private String appName; //
+    private Vector<String> msg;
+    private String appName;
     private Icon icon;      //Notification.getSmallIcon()
 
     String id;      //random generated uuid for indexing
     String key;     //Notification.getKey()
     String title;   //android.title
 
-    static void setDimesion(int watchWidth, int watchHeight) {
+    static void setDimension(int watchWidth, int watchHeight) {
         width = watchWidth;
         height = watchHeight;
-    }
-
-    private int getTextSize() {
-        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context.getApplicationContext());
-        return Integer.parseInt(preferences.getString("textsize", Integer.toString(defaultTextSize)));
     }
 
     WatchNotification(Context context, String key, String title, String text, String appName, Icon icon) {
@@ -56,6 +51,11 @@ public class WatchNotification {
         this.appName = appName;
         this.icon = icon;
         appendMessage(text);
+    }
+
+    private int getTextSize() {
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context.getApplicationContext());
+        return Integer.parseInt(preferences.getString("textsize", Integer.toString(defaultTextSize)));
     }
 
     public String toString() {
@@ -71,16 +71,11 @@ public class WatchNotification {
     }
 
     void appendMessage(String text) {
-        // UPDATE: it's handled in caller now
-        // do not add this message if it is the same as the last message
-        //if (msg.size() > 0 && msg.get(msg.size() - 1).equals(text))
-        //    return;
         // only show the latest 3 messages
         msg.add(text);
         if (msg.size() > 3) {
             msg.remove(0);
         }
-        //
         // re-build overview bitmap when necessary
         if (overviewBitmap != null)
             _buildOverviewBitmap();
@@ -90,7 +85,7 @@ public class WatchNotification {
     }
 
     private static Bitmap drawableToBitmap(Drawable drawable) {
-        Bitmap bitmap = null;
+        Bitmap bitmap;
 
         if (drawable instanceof BitmapDrawable) {
             BitmapDrawable bitmapDrawable = (BitmapDrawable) drawable;
@@ -112,28 +107,24 @@ public class WatchNotification {
     }
 
     Bitmap getIcon() {
-        if (icon != null) {
+        if (icon != null)
             return drawableToBitmap(icon.loadDrawable(context));
-        }
         return null;
     }
 
     Bitmap getOverviewBitmap() {
-        // lazy
         if (overviewBitmap == null)
             _buildOverviewBitmap();
         return overviewBitmap;
     }
 
     int getDetailBitmapCount() {
-        // lazy initialisation
         if (pageBitmaps.size() == 0)
             _buildBitmaps();
         return pageBitmaps.size();
     }
 
     Bitmap getDetailBitmap(int page) {
-        // lazy initialisation
         if (pageBitmaps.size() == 0)
             _buildBitmaps();
         if (page >= 0 && page < pageBitmaps.size())
@@ -169,7 +160,6 @@ public class WatchNotification {
         Canvas canvas = new Canvas(bitmap);
 
         TextPaint textPaint=new TextPaint();
-        //textPaint.setTextAlign(TextPaint.Align.CENTER);
         textPaint.setColor(Color.WHITE);
         textPaint.setTextSize(getTextSize());
 
@@ -186,7 +176,6 @@ public class WatchNotification {
                 .setMaxLines(maxLines) // we need to calculate this properly for ellipsizing (ellipsis) to work
                 .setEllipsize(TextUtils.TruncateAt.END)
                 .build();
-        Log.v(TAG, "=============");
         Log.v(TAG, "[_doTextLayout] max lines:" + maxLines);
 
         // get height of multiline text layout
@@ -207,15 +196,19 @@ public class WatchNotification {
 
         // there is next page (ellipsis is present)
         int offset = 0;
-        if (endLine >= maxLines - 1 && ellipsisStart > 0) {
+        if (endLine >= maxLines - 1 && ellipsisStart >= 0) {
             offset = textLayout.getLineStart(endLine) + ellipsisStart;
-            Log.d(TAG, "[_doTextLayout] Leftover text offset:" + offset);
+            if (offset < text.length() - 1)
+                Log.v(TAG, "[_doTextLayout] Leftover text offset:" + offset);
+            else
+                // all text is used up! offset 0 means no next page
+                offset = 0;
         }
 
         // save bitmap
         // text is short which creates smaller image, let's create a smaller bitmap
         if (layoutHeight < height) {
-            Log.d(TAG, "[_doTextLayout] return smaller bitmap of height:" + layoutHeight + "(original:" + height + ")");
+            Log.v(TAG, "[_doTextLayout] return smaller bitmap of height:" + layoutHeight + "(original:" + height + ")");
             bitmap = Bitmap.createBitmap(bitmap, 0, 0, width, layoutHeight);
         }
 

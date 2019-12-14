@@ -14,13 +14,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 import au.idv.markkuo.android.apps.messagespng.NotificationApp;
-import au.idv.markkuo.android.apps.messagespng.NotificationListActivity;
+import au.idv.markkuo.android.apps.messagespng.AppNotificationListActivity;
 import au.idv.markkuo.android.apps.messagespng.R;
 
 public class NotificationSwitchAdapter extends ArrayAdapter<NotificationApp> {
     private ArrayList<Integer> checkedRows;
     private static final String TAG = NotificationSwitchAdapter.class.getSimpleName();
-    NotificationListActivity activity;
+    private AppNotificationListActivity activity;
 
     // View lookup cache
     private static class ViewHolder {
@@ -29,7 +29,7 @@ public class NotificationSwitchAdapter extends ArrayAdapter<NotificationApp> {
         Switch appSwitch;
     }
 
-    public NotificationSwitchAdapter(NotificationListActivity activity) {
+    public NotificationSwitchAdapter(AppNotificationListActivity activity) {
         super(activity, R.layout.app_notification_switch_row);
         this.checkedRows = new ArrayList<>();
         this.activity = activity;
@@ -41,32 +41,10 @@ public class NotificationSwitchAdapter extends ArrayAdapter<NotificationApp> {
         notifyDataSetChanged();
     }
 
-    /*
-    @Override
-    public void onClick(View v) {
-
-        int position=(Integer) v.getTag();
-        Object object= getItem(position);
-        NotificationApp app=(NotificationApp)object;
-
-        switch (v.getId())
-        {
-            case R.id.appName:
-                Log.d(TAG, "Clicking on " + app.appName);
-                break;
-        }
-    }
-     */
-
     @Override
     public View getView(int position, View convertView, ViewGroup parent) {
-        //final int pos = position;
-        // Get the data item for this position
         final NotificationApp app = getItem(position);
-        // Check if an existing view is being reused, otherwise inflate the view
-        ViewHolder viewHolder; // view lookup cache stored in tag
-
-        //final View result;
+        ViewHolder viewHolder;
 
         if (convertView == null) {
             viewHolder = new ViewHolder();
@@ -75,23 +53,12 @@ public class NotificationSwitchAdapter extends ArrayAdapter<NotificationApp> {
             viewHolder.appIcon = convertView.findViewById(R.id.appIcon);
             viewHolder.appName = convertView.findViewById(R.id.appName);
             viewHolder.appSwitch = convertView.findViewById(R.id.appSwitch);
-
-            //result = convertView;
             convertView.setTag(viewHolder);
         } else {
             viewHolder = (ViewHolder) convertView.getTag();
-            //result=convertView;
         }
 
         viewHolder.appSwitch.setTag(position);
-        /*
-        if (checkedRows.contains(position))
-            viewHolder.appSwitch.setChecked(true);
-        else
-            viewHolder.appSwitch.setChecked(false);
-
-         */
-
         viewHolder.appSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener()
         {
             @Override
@@ -103,7 +70,7 @@ public class NotificationSwitchAdapter extends ArrayAdapter<NotificationApp> {
                 else
                     checkedRows.remove(buttonView.getTag());
                 app.setEnabled(isChecked);
-                Log.d(TAG, "checked rows:" + checkedRows.toString());
+                Log.v(TAG, "checked rows:" + checkedRows.toString());
                 // apply the change
                 activity.updateEnabledApp(app.getPackageName(), isChecked);
             }
@@ -112,7 +79,7 @@ public class NotificationSwitchAdapter extends ArrayAdapter<NotificationApp> {
         viewHolder.appIcon.setImageDrawable(app.getAppIcon());
         viewHolder.appName.setText(app.getAppName());
         viewHolder.appSwitch.setChecked(app.getEnabled());
-        // Return the completed view to render on screen
+
         return convertView;
     }
 }

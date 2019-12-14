@@ -20,7 +20,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity android:name=".NotificationListActivity"
+        <activity android:name=".AppNotificationListActivity"
             android:label="@string/app_name" />
         <activity android:name=".NotificationSettingsActivity"
             android:label="@string/app_name" />

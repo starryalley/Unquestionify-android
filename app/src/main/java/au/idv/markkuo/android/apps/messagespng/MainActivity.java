@@ -7,7 +7,6 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.Bitmap;
-import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.provider.Settings;
@@ -145,26 +144,18 @@ public class MainActivity extends AppCompatActivity {
     private void openPermissionDialog() {
         AlertDialog alertDialog = new AlertDialog.Builder(this).create();
 
-        // Set Custom Title
         TextView title = new TextView(this);
-        // Title Properties
         title.setText(R.string.needs_permission);
         title.setPadding(10, 10, 10, 10);   // Set Position
         title.setGravity(Gravity.CENTER);
-        title.setTextColor(Color.BLACK);
-        title.setTextSize(20);
         alertDialog.setCustomTitle(title);
 
-        // Set Message
         TextView msg = new TextView(this);
-        // Message Properties
         msg.setText(R.string.needs_permission_detail);
         msg.setGravity(Gravity.CENTER_HORIZONTAL);
-        msg.setTextColor(Color.BLACK);
         alertDialog.setView(msg);
 
         // Set Button
-        // you can more buttons
         alertDialog.setButton(AlertDialog.BUTTON_NEUTRAL,"Go to Settings", new DialogInterface.OnClickListener() {
             public void onClick(DialogInterface dialog, int which) {
                 startActivity(new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"));
@@ -173,11 +164,14 @@ public class MainActivity extends AppCompatActivity {
 
         alertDialog.setButton(AlertDialog.BUTTON_NEGATIVE,"CANCEL", new DialogInterface.OnClickListener() {
             public void onClick(DialogInterface dialog, int which) {
-                Toast.makeText(getApplicationContext(), "Unable to read notifications", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getApplicationContext(), "Unable to read any notifications", Toast.LENGTH_SHORT).show();
+                mPermissionAcquired = false;
+                ArrayList<Pair<String, String>> noperm = new ArrayList<>();
+                noperm.add(new Pair<>("No Notification Permission", ""));
+                statisticsAdapter.setStatistics(noperm);
             }
         });
 
-        //new Dialog(getApplicationContext());
         alertDialog.show();
     }
 
@@ -205,7 +199,6 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onResume() {
         super.onResume();
-
         if (mSdkReady)
             loadDevices();
 
@@ -224,6 +217,7 @@ public class MainActivity extends AppCompatActivity {
         } catch (InvalidStateException e) {
             // ignoring
         }
+        unregisterReceiver(receiver);
     }
 
     @Override
@@ -236,7 +230,7 @@ public class MainActivity extends AppCompatActivity {
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
         if (id == R.id.select_notify_apps) {
-            Intent intent = new Intent(this, NotificationListActivity.class);
+            Intent intent = new Intent(this, AppNotificationListActivity.class);
             startActivity(intent);
             return true;
         } else if (id == R.id.settings) {
@@ -272,7 +266,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private class MainActivityReceiver extends BroadcastReceiver {
-
         @Override
         public void onReceive(Context context, Intent intent) {
             String statusString = intent.getStringExtra("service_status");
@@ -291,7 +284,6 @@ public class MainActivity extends AppCompatActivity {
             } catch (Exception e) {
                 Log.e(TAG, "error parsing json service_status:" + e);
             }
-
         }
     }
 }

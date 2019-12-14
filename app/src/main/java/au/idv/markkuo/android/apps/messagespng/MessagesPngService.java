@@ -15,6 +15,7 @@ import android.graphics.Paint;
 import android.graphics.Rect;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.preference.PreferenceManager;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
@@ -54,6 +55,7 @@ import ar.com.hjg.pngj.chunks.PngChunkPLTE;
 
 public class MessagesPngService extends NotificationListenerService {
     private final String TAG = this.getClass().getSimpleName();
+
     // for starting app on the watch
     private static final String CIQ_APP = "c569ccc1-be51-4860-bbcd-2b45a138d64b";
     private ConnectIQ mConnectIQ;
@@ -73,18 +75,20 @@ public class MessagesPngService extends NotificationListenerService {
     private final Map<String, Long> lastNotificationWhen = new HashMap<>();
 
     private String sessionId;
+    private Handler sessionExpireHandler;
 
     // for statistics
-    private int startAppCount = 0;
-    private int sessionCount = 0;
-    private int promptShownCount = 0;
-    private int promptNotShownCount = 0;
-    private int notificationQueryCount = 0;
-    private int bitmapQueryCount = 0;
-    private int notificationDetailQueryCount = 0;
-    private int dismissQueryCount = 0;
-    private int forbiddenCount = 0;
-    private int totalNotificationCount = 0;
+    private static int sessionCount;
+    private static int promptShownCount;
+    private static int promptNotShownCount;
+    private static int notificationQueryCount;
+    private static int bitmapQueryCount;
+    private static int notificationDetailQueryCount;
+    private static int dismissQueryCount;
+    private static int forbiddenCount;
+    private static int totalNotificationCount;
+    private static long totalBitmapBytes;
+
     private Handler statusReportHandler;
 
     // how many pixels to enlarge the square inside the circle
@@ -198,14 +202,6 @@ public class MessagesPngService extends NotificationListenerService {
             Log.e(TAG, "Error creating byte array" + e);
             return "{}";
         }
-
-
-        /*
-        Intent i = new Intent("au.idv.markkuo.garmin.picnotify.NOTIFICATION");
-        i.putExtra("Bitmap", bitmap);
-        //i.putExtra("monochrome", data);
-        sendBroadcast(i);
-         */
     }
 
     private ByteArrayInputStream bitmapToInputStreamUncompressed(Bitmap bitmap) {
@@ -266,6 +262,7 @@ public class MessagesPngService extends NotificationListenerService {
         // cleanup
         reader.end();
         writer.end();
+        totalBitmapBytes += baos.toByteArray().length;
         Log.d(TAG, "Compressed PNG (" + reader.imgInfo.cols + "x" + reader.imgInfo.rows + "): " + bitmap.getByteCount() + " => " + baos.toByteArray().length + " bytes");
         //bitmap.recycle();
         return new ByteArrayInputStream(baos.toByteArray());
@@ -310,6 +307,44 @@ public class MessagesPngService extends NotificationListenerService {
         Log.d(TAG, "allowed app:" + mAllowedSources.toString());
     }
 
+    static void loadStatistics(Context context) {
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
+        sessionCount = preferences.getInt("sessionCount", 0);
+        promptShownCount = preferences.getInt("promptShownCount", 0);
+        promptNotShownCount = preferences.getInt("promptNotShownCount", 0);
+        notificationQueryCount = preferences.getInt("notificationQueryCount", 0);
+        bitmapQueryCount = preferences.getInt("bitmapQueryCount", 0);
+        notificationDetailQueryCount = preferences.getInt("notificationDetailQueryCount", 0);
+        dismissQueryCount = preferences.getInt("dismissQueryCount", 0);
+        forbiddenCount = preferences.getInt("forbiddenCount", 0);
+        totalNotificationCount = preferences.getInt("totalNotificationCount", 0);
+        totalBitmapBytes = preferences.getLong("totalBitmapBytes", 0);
+    }
+
+    static void saveStatistics(Context context) {
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
+        SharedPreferences.Editor editor = preferences.edit();
+        editor.putInt("sessionCount", sessionCount);
+        editor.putInt("promptShownCount", promptShownCount);
+        editor.putInt("promptNotShownCount", promptNotShownCount);
+        editor.putInt("notificationQueryCount", notificationQueryCount);
+        editor.putInt("bitmapQueryCount", bitmapQueryCount);
+        editor.putInt("notificationDetailQueryCount", notificationDetailQueryCount);
+        editor.putInt("dismissQueryCount", dismissQueryCount);
+        editor.putInt("forbiddenCount", forbiddenCount);
+        editor.putInt("totalNotificationCount", totalNotificationCount);
+        editor.putLong("totalBitmapBytes", totalBitmapBytes);
+        editor.apply();
+    }
+
+    static void resetStatistics(Context context) {
+        sessionCount = promptShownCount = promptNotShownCount = notificationQueryCount =
+                bitmapQueryCount = notificationDetailQueryCount = dismissQueryCount =
+                        forbiddenCount = totalNotificationCount = 0;
+        totalBitmapBytes = 0;
+        saveStatistics(context);
+    }
+
     private boolean getNonASCIIOnly() {
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
         return preferences.getBoolean("nonascii", false);
@@ -333,6 +368,7 @@ public class MessagesPngService extends NotificationListenerService {
         mNotifications = new ArrayList<>();
 
         loadAllowedApps();
+        loadStatistics(getApplicationContext());
 
         // initialise CIQ
         mConnectIQ = ConnectIQ.getInstance(this, ConnectIQ.IQConnectType.WIRELESS);
@@ -359,7 +395,6 @@ public class MessagesPngService extends NotificationListenerService {
 
         });
 
-        // create watch app
         mCIQApp = new IQApp(CIQ_APP);
 
         // start server
@@ -367,12 +402,14 @@ public class MessagesPngService extends NotificationListenerService {
             server = new NotificationHTTPD();
             server.start();
         } catch (Exception e) {
-            Log.e(TAG, "error starting httpd");
+            Log.e(TAG, "error starting httpd:" + e);
         }
     }
 
     @Override
     public void onDestroy() {
+        saveStatistics(getApplicationContext());
+        server.stop();
         try {
             mConnectIQ.shutdown(this);
         } catch (InvalidStateException e) {
@@ -384,7 +421,6 @@ public class MessagesPngService extends NotificationListenerService {
     }
 
     public void loadCIQDevices() {
-        // Retrieve the list of known devices
         try {
             List<IQDevice> devices = mConnectIQ.getKnownDevices();
             if (devices != null) {
@@ -394,15 +430,7 @@ public class MessagesPngService extends NotificationListenerService {
                     Log.i(TAG, "CIQ Device:" + mCIQDevice.getFriendlyName());
                 }
             }
-        } catch (InvalidStateException e) {
-            // This generally means you forgot to call initialize(), but since
-            // we are in the callback for initialize(), this should never happen
-            Log.e(TAG, "register failed:" + e);
-        } catch (ServiceUnavailableException e) {
-            // This will happen if for some reason your app was not able to connect
-            // to the ConnectIQ service running within Garmin Connect Mobile.  This
-            // could be because Garmin Connect Mobile is not installed or needs to
-            // be upgraded.
+        } catch (Exception e) {
             Log.e(TAG, "register failed:" + e);
         }
     }
@@ -411,9 +439,9 @@ public class MessagesPngService extends NotificationListenerService {
         // ignore group summary and local-only messages
         if ((sbn.getNotification().flags & Notification.FLAG_GROUP_SUMMARY) != 0 ||
                 (sbn.getNotification().flags & Notification.FLAG_LOCAL_ONLY) != 0) {
-            //Log.d(TAG, "[ignore]" + sbn.getNotification().tickerText + "\t" + getNotificationText(sbn) + "(" + sbn.getPackageName() + ")");
             return;
         }
+        // ignore old notification
         Long lastWhen = lastNotificationWhen.get(sbn.getKey());
         if(lastWhen != null && lastWhen >= sbn.getNotification().when)
             return;
@@ -436,12 +464,12 @@ public class MessagesPngService extends NotificationListenerService {
                 // move this to queue start
                 mNotifications.add(0, mNotifications.remove(i));
                 Log.d(TAG, "[append] [" + sbn.getPackageName() + "]:" + sbn.getNotification().tickerText + " (flag:" + sbn.getNotification().flags + ")");
-                Log.d(TAG, "==== " + sbn.toString());
                 lastUpdatedTS = System.currentTimeMillis();
                 startWatchApp();
                 return;
             }
         }
+
         // doesn't exists, let's add to the beginning of the list
         Log.d(TAG, "[add] [" + sbn.getPackageName() + "]:" + sbn.getNotification().tickerText + " (flag:" + sbn.getNotification().flags + ")");
         mNotifications.add(0, new WatchNotification(getApplicationContext(), sbn.getKey(), getNotificationTitle(sbn),
@@ -470,26 +498,16 @@ public class MessagesPngService extends NotificationListenerService {
             return;
         }
 
-        Log.d(TAG, "onNotificationPosted " + sbn.getNotification().tickerText + "\t" + getNotificationText(sbn) + "(" + sbn.getPackageName() + ")");
+        Log.v(TAG, "onNotificationPosted " + sbn.getNotification().tickerText + "\t" + getNotificationText(sbn) + "(" + sbn.getPackageName() + ")");
         // add this notification
         addNotification(sbn);
-
-
-        /*
-        // TODO: remove this
-        Log.d(TAG, "===============");
-        for (String key : sbn.getNotification().extras.keySet()) {
-            if (sbn.getNotification().extras.get(key) != null)
-                Log.d(TAG, key + "=" + sbn.getNotification().extras.get(key).toString());
-        }
-        */
     }
 
     @Override
     public void onNotificationRemoved(StatusBarNotification sbn) {
         super.onNotificationRemoved(sbn);
         if (mAllowedSources.contains(sbn.getPackageName())) {
-            Log.d(TAG, "onNotificationRemoved " + sbn.getNotification().tickerText + "\t" + getNotificationText(sbn) + "(" + sbn.getPackageName() + ")");
+            Log.v(TAG, "onNotificationRemoved " + sbn.getNotification().tickerText + "\t" + getNotificationText(sbn) + "(" + sbn.getPackageName() + ")");
             removeNotification(sbn);
         }
     }
@@ -508,17 +526,15 @@ public class MessagesPngService extends NotificationListenerService {
         return data == null ? "" : data.toString();
     }
 
-
     @Override
     public void onListenerConnected () {
         connected = true;
-        Log.i(TAG, "Listener connected");
+        Log.v(TAG, "Listener connected");
 
         // get current notification
         for (StatusBarNotification sbn : MessagesPngService.this.getActiveNotifications()) {
-            if (mAllowedSources.contains(sbn.getPackageName())) {
+            if (mAllowedSources.contains(sbn.getPackageName()))
                 addNotification(sbn);
-            }
         }
     }
 
@@ -529,10 +545,11 @@ public class MessagesPngService extends NotificationListenerService {
         }
         if (mOpenAppRequestInProgress)
             return;
+        if (mCIQApp.getStatus() != IQApp.IQAppStatus.INSTALLED)
+            return;
         mOpenAppRequestInProgress = true;
-        Log.d(TAG, "starting watch app");
-        startAppCount++;
-        final Handler handler = new Handler();
+        Log.i(TAG, "starting watch app");
+        final Handler handler = new Handler(Looper.getMainLooper());
         handler.postDelayed(new Runnable() {
             @Override
             public void run() {
@@ -559,13 +576,23 @@ public class MessagesPngService extends NotificationListenerService {
         JSONObject o = new JSONObject();
         try {
             o.put("Service Running", connected ? "Running" : "Stopped");
-            o.put("Starting Watchapp", startAppCount + " times");
             o.put("Watchapp Prompt Shown", promptShownCount);
             o.put("Watchapp Prompt Not Shown", promptNotShownCount);
             o.put("Watchapp Use Count", sessionCount);
             o.put("Notification Query Count", notificationQueryCount);
             o.put("Detail Notification Query Count", notificationDetailQueryCount);
             o.put("Total Bitmap Requested", bitmapQueryCount);
+            String unit = "B";
+            float val = totalBitmapBytes;
+            if (totalBitmapBytes > 1024) {// convert to KB
+                val /= 1024;
+                unit = "KB";
+            }
+            if (val > 1024) {// convert to MB
+                val /= 1024;
+                unit = "MB";
+            }
+            o.put("Total Transferred Bitmap Size", String.format("%.1f", val) + " " + unit);
             o.put("Notification Dismissal Count", dismissQueryCount);
             o.put("Forbidden Requests", forbiddenCount);
             o.put("Current Notification Count", mNotifications.size());
@@ -578,6 +605,8 @@ public class MessagesPngService extends NotificationListenerService {
         Intent i = new Intent("au.idv.markkuo.android.apps.messagespng.NOTIFICATION_LISTENER_SERVICE_STATUS");
         i.putExtra("service_status", o.toString());
         sendBroadcast(i);
+        // save current statistics
+        saveStatistics(getApplicationContext());
     }
 
     private class MessagePngServiceReceiver extends BroadcastReceiver{
@@ -600,13 +629,11 @@ public class MessagesPngService extends NotificationListenerService {
                     Log.d(TAG, "removing " + packageName + " from allowed sources");
                     saveAllowedSources();
                 }
-            } else if (command.equals("setTextSize")) {
-                int size = intent.getIntExtra("textsize", 22);
-                saveAllowedSources();
             } else if (command.equals("startStatusReport")) {
                 if (statusReportHandler == null) {
                     Log.d(TAG, "starting status report");
-                    broadcastServiceStatus();//do it now once
+                    broadcastServiceStatus();
+
                     // start a timer to send it every 10 sec
                     statusReportHandler = new Handler();
                     final int delay = 10 * 1000; //milliseconds
@@ -625,8 +652,22 @@ public class MessagesPngService extends NotificationListenerService {
                     statusReportHandler = null;
                 }
             }
-            //TODO: add more
         }
+    }
+
+    private void scheduleSessionExpire() {
+        if (sessionExpireHandler != null) {
+            sessionExpireHandler.removeCallbacksAndMessages(null);
+        } else
+            sessionExpireHandler = new Handler(Looper.getMainLooper());
+        sessionExpireHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                // clear the session after 30 seconds
+                Log.i(TAG, "session expired");
+                sessionId = "";
+            }
+        }, 1000 * 60 * 3); // 3 min
     }
 
     // the HTTPD service for watch to read/dismiss notifications
@@ -652,15 +693,15 @@ public class MessagesPngService extends NotificationListenerService {
             Method method = session.getMethod();
             String uri = session.getUri();
             // TODO: re-enable this check after development finishes
-//            if (!session.getHeaders().get("remote-addr").equals("127.0.0.1")) {
-//                Log.e(TAG, "forbidding connection other than localhost. Incoming address:" + session.getHeaders().get("remote-addr"));
-//                forbiddenCount++;
-//                return new NanoHTTPD.Response(Response.Status.FORBIDDEN, MIME_PLAINTEXT, "SERVICE FORBIDDEN");
-//            }
+            if (!session.getHeaders().get("remote-addr").equals("127.0.0.1")) {
+                Log.e(TAG, "forbidding connection other than localhost. Incoming address:" + session.getHeaders().get("remote-addr"));
+                forbiddenCount++;
+                return new NanoHTTPD.Response(Response.Status.FORBIDDEN, MIME_PLAINTEXT, "SERVICE FORBIDDEN");
+            }
 
             Map<String, String> params = session.getParms();
             Map<String, String> headers = session.getHeaders();
-            Log.v(TAG, "=== [" + method.name() + "] URI:" + uri + ", Headers:" + headers + ", Params:" + params);//TODO: remove this
+            //Log.v(TAG, "=== [" + method.name() + "] URI:" + uri + ", Headers:" + headers + ", Params:" + params);
 
             // ========== request session ============
             if (method == Method.GET && uri.equals("/request_session")) {
@@ -686,11 +727,12 @@ public class MessagesPngService extends NotificationListenerService {
                     watchWidth = watchHeight = (int) Math.ceil(Math.sqrt(watchWidth * watchWidth / 2)) + defaultSquareWidthOffset;
                 }
                 Log.d(TAG, "Png will be of " + watchWidth + "x" + watchHeight + " pixels");
-                WatchNotification.setDimesion(watchWidth, watchHeight);
+                WatchNotification.setDimension(watchWidth, watchHeight);
 
                 // update sessionId
                 sessionId = UUID.randomUUID().toString();
                 Log.i(TAG, "Session started");
+                scheduleSessionExpire();
                 sessionCount++;
                 // create JSON
                 JSONObject json = new JSONObject();
@@ -704,16 +746,16 @@ public class MessagesPngService extends NotificationListenerService {
                 return new NanoHTTPD.Response(Response.Status.OK, "application/json", json.toString());
             }
 
-            //TODO: testing only, move to the end
-            if (method == Method.GET && uri.startsWith("/icons/")) {
-                if (mNotifications.size() > 0) {
-                    Bitmap bitmap = mNotifications.get(0).getIcon();
-                    if (bitmap != null)
-                        return new NanoHTTPD.Response(Response.Status.OK, "image/png", bitmapToInputStreamUncompressed(bitmap));
-                }
-                return new NanoHTTPD.Response(Response.Status.OK, "image/png",
-                        bitmapToInputStream(createBitmapFromText("No Icon")));
-            }
+//            //TODO: testing only, move to the end
+//            if (method == Method.GET && uri.startsWith("/icons/")) {
+//                if (mNotifications.size() > 0) {
+//                    Bitmap bitmap = mNotifications.get(0).getIcon();
+//                    if (bitmap != null)
+//                        return new NanoHTTPD.Response(Response.Status.OK, "image/png", bitmapToInputStreamUncompressed(bitmap));
+//                }
+//                return new NanoHTTPD.Response(Response.Status.OK, "image/png",
+//                        bitmapToInputStream(createBitmapFromText("No Icon")));
+//            }
 
             // all other endpoints needs sessionId, so let's check it now
             if (TextUtils.isEmpty(sessionId)) {
@@ -729,6 +771,7 @@ public class MessagesPngService extends NotificationListenerService {
             }
 
             // ok, we have permission. Let's proceed
+            scheduleSessionExpire();
 
             if (method == Method.GET && uri.equals("/notifications")) {
                 notificationQueryCount++;
@@ -757,7 +800,6 @@ public class MessagesPngService extends NotificationListenerService {
                             bitmapToInputStream(createBitmapFromText("Unavailable")));
                 }
 
-
                 int page = -1; // -1 is the overview page (max 3 lines)
                 if (params.get("page") != null)
                     page = Integer.parseInt(params.get("page"));
@@ -782,8 +824,6 @@ public class MessagesPngService extends NotificationListenerService {
                 }
 
                 // ok, now we want to create bitmap for notification
-
-                //Bitmap bitmap = createBitmapFromTextAutoLayout(notification.toString(), width, height, page);
                 Bitmap bitmap = null;
                 if (page == -1)
                     bitmap = notification.getOverviewBitmap();
@@ -806,7 +846,6 @@ public class MessagesPngService extends NotificationListenerService {
                 }
                 notificationDetailQueryCount++;
                 String id = uri.substring("/notifications_details/".length());
-                // do cache
                 WatchNotification notification = null;
                 for (final WatchNotification n : mNotifications) {
                     if (n.id.equals(id)) {

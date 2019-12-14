@@ -46,6 +46,18 @@ public class NotificationSettingsFragment extends PreferenceFragmentCompat {
                 }
             });
         }
+
+        final Preference resetStatPreference = findPreference("resetStat");
+        if (resetStatPreference != null) {
+            resetStatPreference.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener() {
+                @Override
+                public boolean onPreferenceClick(Preference preference) {
+                    Log.d(TAG, "Reset statistics");
+                    MessagesPngService.resetStatistics(getActivity().getApplicationContext());
+                    return true;
+                }
+            });
+        }
     }
 
 }

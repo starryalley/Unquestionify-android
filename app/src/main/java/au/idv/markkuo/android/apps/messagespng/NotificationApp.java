@@ -2,13 +2,14 @@ package au.idv.markkuo.android.apps.messagespng;
 
 import android.graphics.drawable.Drawable;
 
+// abstraction for a non-system application used in the listview
 public class NotificationApp {
     private String packageName;
     private String appName;
     private boolean enabled;
     private Drawable icon;
 
-    public NotificationApp(String packageName, String appName, Drawable icon) {
+    NotificationApp(String packageName, String appName, Drawable icon) {
         this.packageName = packageName;
         this.appName = appName;
         this.icon = icon;

@@ -1,6 +1,5 @@
 package au.idv.markkuo.android.apps.messagespng;
 
-import android.app.ListActivity;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
@@ -24,9 +23,10 @@ import java.util.Set;
 
 import au.idv.markkuo.android.apps.messagespng.adapter.NotificationSwitchAdapter;
 
-public class NotificationListActivity extends AppCompatActivity {
+public class AppNotificationListActivity extends AppCompatActivity {
 
-    private static final String TAG = NotificationListActivity.class.getSimpleName();
+    private static final String TAG = AppNotificationListActivity.class.getSimpleName();
+
     private NotificationSwitchAdapter adapter;
     private List<NotificationApp> list;
     private ListView listView;
@@ -50,10 +50,9 @@ public class NotificationListActivity extends AppCompatActivity {
         // get allowed apps from current preference
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
         allowedApps = sharedPreferences.getStringSet("allowed_apps", null);
-        if (allowedApps == null) {
-            Log.wtf(TAG, "allowed_apps should not be null");
-        }
-        // populate the listview
+        if (allowedApps == null)
+            Log.wtf(TAG, "allowed_apps should not be null.");
+        // populate the listview in the background
         new ListAppsTask().execute();
     }
 
@@ -66,7 +65,6 @@ public class NotificationListActivity extends AppCompatActivity {
     public void onResume() {
         super.onResume();
     }
-
 
     public void updateEnabledApp(String appPackage, boolean enabled) {
         Intent intent = new Intent();
@@ -90,15 +88,24 @@ public class NotificationListActivity extends AppCompatActivity {
         });
 
         for (ApplicationInfo packageInfo : packages) {
-            //Log.d(TAG, "Installed app:[" + getAppName(packageInfo) + "]: " + packageInfo.packageName);
-            if (((packageInfo.flags & ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) == 0) &&
-                    ((packageInfo.flags & ApplicationInfo.FLAG_SYSTEM) == 0)) {
-                NotificationApp app = new NotificationApp(packageInfo.packageName, getAppName(packageInfo), getAppIcon(packageInfo.packageName));
-                if (allowedApps != null && allowedApps.contains(packageInfo.packageName)) {
-                    app.setEnabled(true);
-                }
-                list.add(app);
+            boolean isSystem = false;
+
+            if (((packageInfo.flags & ApplicationInfo.FLAG_SYSTEM) > 0))
+                isSystem = true;
+
+            //Non-system app
+            if (isSystem && packageInfo.sourceDir.startsWith("/data/app/"))
+                isSystem = false;
+
+            if (isSystem) {
+                //Log.v(TAG, "ignoring system app:" + getAppName(packageInfo) + "(" + packageInfo.packageName + ") " + String.format("0x%x", packageInfo.flags));
+                continue;
             }
+
+            NotificationApp app = new NotificationApp(packageInfo.packageName, getAppName(packageInfo), getAppIcon(packageInfo.packageName));
+            if (allowedApps != null && allowedApps.contains(packageInfo.packageName))
+                app.setEnabled(true);
+            list.add(app);
         }
     }
 
@@ -108,7 +115,7 @@ public class NotificationListActivity extends AppCompatActivity {
 
     private Drawable getAppIcon(String packageName){
         Drawable drawable;
-        try{
+        try {
             drawable = packageManager.getApplicationIcon(packageName);
         }
         catch (PackageManager.NameNotFoundException e) {
@@ -119,15 +126,15 @@ public class NotificationListActivity extends AppCompatActivity {
 
     private class ListAppsTask extends AsyncTask<Void, Void, Void> {
         @Override
-        protected Void doInBackground(Void... voids) {
-            listApps();
-            return null;
-        }
-
-        @Override
         protected void onPreExecute() {
             super.onPreExecute();
             list.clear();
+        }
+
+        @Override
+        protected Void doInBackground(Void... voids) {
+            listApps();
+            return null;
         }
 
         @Override
@@ -137,5 +144,4 @@ public class NotificationListActivity extends AppCompatActivity {
             adapter.setApps(list);
         }
     }
-
 }

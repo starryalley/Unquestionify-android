@@ -13,8 +13,6 @@ import android.widget.TextView;
 import com.garmin.android.connectiq.IQDevice;
 import com.garmin.android.connectiq.IQDevice.IQDeviceStatus;
 
-import au.idv.markkuo.android.apps.messagespng.MainActivity;
-
 public class IQDeviceAdapter extends ArrayAdapter<IQDevice> {
     private final String TAG = getClass().getSimpleName();
     private LayoutInflater mInflater;
@@ -47,7 +45,7 @@ public class IQDeviceAdapter extends ArrayAdapter<IQDevice> {
 
     public synchronized void updateDeviceStatus(IQDevice device, IQDeviceStatus status) {
         int numItems = this.getCount();
-        Log.d(TAG, "device:" + device + " status changed:" + status.name());
+        Log.i(TAG, "device:" + device + " status changed:" + status.name());
         for(int i = 0; i < numItems; i++) {
             IQDevice local = getItem(i);
             if (local.getDeviceIdentifier() == device.getDeviceIdentifier()) {
