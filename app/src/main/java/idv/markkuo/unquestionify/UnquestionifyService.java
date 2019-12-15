@@ -479,7 +479,7 @@ public class UnquestionifyService extends NotificationListenerService {
                 // similar message is defined as having the same StatusBarNotification key and same notification title
                 if (n.key.equals(sbn.getKey()) && n.title.equals(getNotificationTitle(sbn))) {
                     // add to existing
-                    n.appendMessage(notificationText);
+                    n.appendMessage(notificationText, sbn.getNotification().when);
                     // move this to queue start
                     mNotifications.add(0, mNotifications.remove(i));
                     Log.d(TAG, "[append] [" + sbn.getPackageName() + "]:" + sbn.getNotification().tickerText + " (flag:" + sbn.getNotification().flags + ")");
@@ -494,7 +494,7 @@ public class UnquestionifyService extends NotificationListenerService {
         Log.d(TAG, "[add] [" + sbn.getPackageName() + "]:" + sbn.getNotification().tickerText + " (flag:" + sbn.getNotification().flags + ")");
         mNotifications.add(0, new WatchNotification(getApplicationContext(), sbn.getKey(), getNotificationTitle(sbn),
                 notificationText, getAppName(sbn.getPackageName()),
-                sbn.getNotification().getSmallIcon()));
+                sbn.getNotification().getSmallIcon(), sbn.getNotification().when));
         lastUpdatedTS = System.currentTimeMillis();
         startWatchApp();
     }
@@ -713,11 +713,11 @@ public class UnquestionifyService extends NotificationListenerService {
             Method method = session.getMethod();
             String uri = session.getUri();
 
-            if (!session.getHeaders().get("remote-addr").equals("127.0.0.1")) {
-                Log.e(TAG, "forbidding connection other than localhost. Incoming address:" + session.getHeaders().get("remote-addr"));
-                forbiddenCount++;
-                return new NanoHTTPD.Response(Response.Status.FORBIDDEN, MIME_PLAINTEXT, "SERVICE FORBIDDEN");
-            }
+//            if (!session.getHeaders().get("remote-addr").equals("127.0.0.1")) {
+//                Log.e(TAG, "forbidding connection other than localhost. Incoming address:" + session.getHeaders().get("remote-addr"));
+//                forbiddenCount++;
+//                return new NanoHTTPD.Response(Response.Status.FORBIDDEN, MIME_PLAINTEXT, "SERVICE FORBIDDEN");
+//            }
 
             Map<String, String> params = session.getParms();
             Map<String, String> headers = session.getHeaders();
@@ -800,7 +800,10 @@ public class UnquestionifyService extends NotificationListenerService {
                 try {
                     JSONArray notif = new JSONArray();
                     for (final WatchNotification n : mNotifications) {
-                        notif.put(n.id);
+                        JSONObject o = new JSONObject();
+                        o.put("id", n.id);
+                        o.put("when", n.getWhen());
+                        notif.put(o);
                         Log.d(TAG, "[list]" + n.toLogString());
                     }
                     json.put("notification", notif);

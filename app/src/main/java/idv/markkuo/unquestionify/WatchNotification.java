@@ -17,6 +17,9 @@ import android.text.TextUtils;
 import android.util.Log;
 import android.util.Pair;
 
+import java.text.DateFormat;
+import java.util.Date;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.Vector;
 
@@ -31,17 +34,20 @@ public class WatchNotification {
     private Vector<String> msg;
     private String appName;
     private Icon icon;      //Notification.getSmallIcon()
+    private long when;      //Notification.when
+    private static Locale locale;
 
     String id;      //random generated uuid for indexing
     String key;     //Notification.getKey()
     String title;   //android.title
+
 
     static void setDimension(int watchWidth, int watchHeight) {
         width = watchWidth;
         height = watchHeight;
     }
 
-    WatchNotification(Context context, String key, String title, String text, String appName, Icon icon) {
+    WatchNotification(Context context, String key, String title, String text, String appName, Icon icon, long when) {
         pageBitmaps = new Vector<>();
         this.context = context;
         this.id = UUID.randomUUID().toString();
@@ -50,7 +56,8 @@ public class WatchNotification {
         this.msg = new Vector<>(4);
         this.appName = appName;
         this.icon = icon;
-        appendMessage(text);
+        appendMessage(text, when);
+        locale = context.getResources().getConfiguration().getLocales().get(0);
     }
 
     private int getTextSize() {
@@ -67,10 +74,10 @@ public class WatchNotification {
     }
 
     String toLogString() {
-        return toString().replaceAll("\n", "\t");
+        return "[" + getWhen() + "] " + toString().replaceAll("\n", "\t");
     }
 
-    void appendMessage(String text) {
+    void appendMessage(String text, long when) {
         // only show the latest 3 messages
         msg.add(text);
         if (msg.size() > 3) {
@@ -82,6 +89,7 @@ public class WatchNotification {
         // re-build bitmap when we have ever built it
         if (pageBitmaps.size() > 0)
             _buildBitmaps();
+        this.when = when;
     }
 
     private static Bitmap drawableToBitmap(Drawable drawable) {
@@ -130,6 +138,20 @@ public class WatchNotification {
         if (page >= 0 && page < pageBitmaps.size())
             return pageBitmaps.get(page);
         return null;
+    }
+
+    String getWhen() {
+        long now = System.currentTimeMillis();
+        if (when != 0 && now > when) {
+            long diff = now - when;
+            int hour = (int) (diff/(1000 * 60 * 60));
+            int min = (int) (diff/(1000*60)) % 60;
+            if (hour == 0)
+                return String.format(locale, "%d min ago", min);
+            if (hour < 3)
+                return String.format(locale, "%dh%2dm ago", hour, min);
+        }
+        return DateFormat.getTimeInstance(DateFormat.SHORT).format(new Date(when));
     }
 
     private void _buildOverviewBitmap() {
