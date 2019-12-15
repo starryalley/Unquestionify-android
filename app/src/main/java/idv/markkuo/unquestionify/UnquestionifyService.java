@@ -712,7 +712,7 @@ public class UnquestionifyService extends NotificationListenerService {
         public Response serve(IHTTPSession session) {
             Method method = session.getMethod();
             String uri = session.getUri();
-            // TODO: re-enable this check after development finishes
+
             if (!session.getHeaders().get("remote-addr").equals("127.0.0.1")) {
                 Log.e(TAG, "forbidding connection other than localhost. Incoming address:" + session.getHeaders().get("remote-addr"));
                 forbiddenCount++;

@@ -18,5 +18,5 @@
     <string name="settings">App Settings</string>
     <string name="select_notify_app">Select which applications can send notifications as images</string>
 
-    <string name="loading_app">Loading installed Apps…</string>
+    <string name="loading_app">Loading installed Apps… \nIt may take a few seconds or more depending on number of installed Apps.</string>
 </resources>

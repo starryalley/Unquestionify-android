@@ -9,6 +9,7 @@ import android.content.IntentFilter;
 import android.graphics.Bitmap;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
+import android.os.Handler;
 import android.provider.Settings;
 import android.util.Log;
 import android.util.Pair;
@@ -51,9 +52,11 @@ public class MainActivity extends AppCompatActivity {
     private ListView statisticsListView;
     private IQDeviceAdapter deviceAdapter;
     private StatisticsAdapter statisticsAdapter;
-    private boolean mSdkReady = true; // assume it is ready since we have a service running doing the same thing
+    private boolean mSdkReady = false;
     private static final String TAG = MainActivity.class.getSimpleName();
-    private boolean mPermissionAcquired = false;
+
+    private boolean deviceStatusReceived = false;
+    private boolean statisticsReceived = false;
 
     private MainActivityReceiver receiver;
 
@@ -61,6 +64,7 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public void onDeviceStatusChanged(IQDevice device, IQDeviceStatus status) {
+            deviceStatusReceived = true;
             MainActivity.this.deviceAdapter.updateDeviceStatus(device, status);
             Log.i(TAG, "Device:" + device + " status changed:" + status);
         }
@@ -78,6 +82,7 @@ public class MainActivity extends AppCompatActivity {
         public void onSdkReady() {
             Log.d(TAG, "SDK ready");
             mSdkReady = true;
+            loadDevices();
         }
 
         @Override
@@ -105,20 +110,36 @@ public class MainActivity extends AppCompatActivity {
         filter.addAction("idv.markkuo.unquestionify.NOTIFICATION_LISTENER_SERVICE_STATUS");
         registerReceiver(receiver, filter);
 
-        mConnectIQ = ConnectIQ.getInstance();
-
-        // Initialize the SDK
-        mConnectIQ.initialize(this, true, mListener);
-
         // check notifications access permission
         String notificationListenerString = Settings.Secure.getString(this.getContentResolver(),"enabled_notification_listeners");
         if (notificationListenerString == null || !notificationListenerString.contains(getPackageName())) {
             // notification access has not been acquired yet
             openPermissionDialog();
-        } else {
-            // has access to the notifications
-            mPermissionAcquired = true;
+            return;
         }
+
+        // has access to the notifications
+
+        // Initialize the SDK
+        mConnectIQ = ConnectIQ.getInstance();
+        mConnectIQ.initialize(this, true, mListener);
+
+        // wait 3 sec for device status and statistics to be updated
+        new Handler().postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                // if those status are not yet received, request it again here
+                // since the background Service may not have been started when this activity starts
+                if (!deviceStatusReceived)
+                    loadDevices();
+                if (!statisticsReceived) {
+                    Intent intent = new Intent();
+                    intent.setAction("idv.markkuo.unquestionify.NOTIFICATION_LISTENER_SERVICE");
+                    intent.putExtra("command", "startStatusReport");
+                    sendBroadcast(intent);
+                }
+            }
+        }, 3 * 1000);
     }
 
     private void showImage(Bitmap bitmap) {
@@ -165,7 +186,6 @@ public class MainActivity extends AppCompatActivity {
         alertDialog.setButton(AlertDialog.BUTTON_NEGATIVE,"CANCEL", new DialogInterface.OnClickListener() {
             public void onClick(DialogInterface dialog, int which) {
                 Toast.makeText(getApplicationContext(), "Unable to read any notifications", Toast.LENGTH_SHORT).show();
-                mPermissionAcquired = false;
                 ArrayList<Pair<String, String>> noperm = new ArrayList<>();
                 noperm.add(new Pair<>("No Notification Permission", ""));
                 statisticsAdapter.setStatistics(noperm);
@@ -199,6 +219,12 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onResume() {
         super.onResume();
+
+        if (mConnectIQ == null) {
+            mConnectIQ = ConnectIQ.getInstance();
+            mConnectIQ.initialize(this, true, mListener);
+        }
+
         if (mSdkReady)
             loadDevices();
 
@@ -212,8 +238,10 @@ public class MainActivity extends AppCompatActivity {
     public void onDestroy() {
         super.onDestroy();
         try {
-            mConnectIQ.unregisterAllForEvents();
-            mConnectIQ.shutdown(this);
+            if (mConnectIQ != null) {
+                mConnectIQ.unregisterAllForEvents();
+                mConnectIQ.shutdown(this);
+            }
         } catch (InvalidStateException e) {
             // ignoring
         }
@@ -253,14 +281,8 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         } catch (InvalidStateException e) {
-            // This generally means you forgot to call initialize(), but since
-            // we are in the callback for initialize(), this should never happen
             Log.wtf(TAG, "register failed:" + e);
         } catch (ServiceUnavailableException e) {
-            // This will happen if for some reason your app was not able to connect
-            // to the ConnectIQ service running within Garmin Connect Mobile.  This
-            // could be because Garmin Connect Mobile is not installed or needs to
-            // be upgraded.
             Log.e(TAG, "service unavailable:" + e);
         }
     }
@@ -268,6 +290,7 @@ public class MainActivity extends AppCompatActivity {
     private class MainActivityReceiver extends BroadcastReceiver {
         @Override
         public void onReceive(Context context, Intent intent) {
+            statisticsReceived = true;
             String statusString = intent.getStringExtra("service_status");
             try {
                 JSONObject o = new JSONObject(statusString);
