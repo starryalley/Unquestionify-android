@@ -29,18 +29,19 @@ public class WatchNotification {
 
     private Bitmap overviewBitmap;
     private Vector<Bitmap> pageBitmaps;
+    private boolean hasDetail = false;
     private static int width = 260, height = 260;
     private Context context;
     private Vector<String> msg;
     private String appName;
     private Icon icon;      //Notification.getSmallIcon()
-    private long when;      //Notification.when
+
     private static Locale locale;
 
     String id;      //random generated uuid for indexing
     String key;     //Notification.getKey()
     String title;   //android.title
-
+    long when;      //Notification.when
 
     static void setDimension(int watchWidth, int watchHeight) {
         width = watchWidth;
@@ -83,12 +84,11 @@ public class WatchNotification {
         if (msg.size() > 3) {
             msg.remove(0);
         }
-        // re-build overview bitmap when necessary
-        if (overviewBitmap != null)
+        // re-build bitmap when necessary
+        if (overviewBitmap != null) {
             _buildOverviewBitmap();
-        // re-build bitmap when we have ever built it
-        if (pageBitmaps.size() > 0)
             _buildBitmaps();
+        }
         this.when = when;
     }
 
@@ -127,13 +127,16 @@ public class WatchNotification {
     }
 
     int getDetailBitmapCount() {
-        if (pageBitmaps.size() == 0)
+        // before we try to get detail bitmap, we should make sure overview bitmap is generated
+        getOverviewBitmap();
+        // if this notification has detail, let's build it now
+        if (hasDetail && pageBitmaps.size() == 0)
             _buildBitmaps();
         return pageBitmaps.size();
     }
 
     Bitmap getDetailBitmap(int page) {
-        if (pageBitmaps.size() == 0)
+        if (hasDetail && pageBitmaps.size() == 0)
             _buildBitmaps();
         if (page >= 0 && page < pageBitmaps.size())
             return pageBitmaps.get(page);
@@ -156,11 +159,14 @@ public class WatchNotification {
 
     private void _buildOverviewBitmap() {
         Pair<Bitmap, Integer> p = _doTextLayout(toString(), width, height, 3);
+        hasDetail = !(p.second == 0);
         overviewBitmap = p.first;
     }
 
     private void _buildBitmaps() {
         pageBitmaps.clear();
+        if (!hasDetail)
+            return;
         //_buildBitmaps(toString(), width, height);
         int maxLines = height / (getTextSize() + 2) - 1; //TODO: i don't know the spacing, just use +2
         Log.d(TAG, "building detail message bitmaps...");
@@ -213,6 +219,7 @@ public class WatchNotification {
         int maxLinesOnpage = endLine;
 
         int ellipsisStart = textLayout.getEllipsisStart(endLine);
+
         Log.v(TAG, "[_doTextLayout] endLine:" + endLine + ",endLineBottom:" + endLineBottom +
                 ",maxLinesOnPage:" + maxLinesOnpage + ",endline ellipsis start:" + ellipsisStart);
 
@@ -220,8 +227,8 @@ public class WatchNotification {
         int offset = 0;
         if (endLine >= maxLines - 1 && ellipsisStart >= 0) {
             offset = textLayout.getLineStart(endLine) + ellipsisStart;
-            if (offset < text.length() - 1)
-                Log.v(TAG, "[_doTextLayout] Leftover text offset:" + offset);
+            if (textLayout.getEllipsisCount(endLine) > 0)
+                Log.v(TAG, "[_doTextLayout] Leftover text offset:" + offset + " (total length:" + text.length() + ") " + text.substring(offset));
             else
                 // all text is used up! offset 0 means no next page
                 offset = 0;
