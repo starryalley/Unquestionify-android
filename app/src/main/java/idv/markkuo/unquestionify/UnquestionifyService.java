@@ -741,6 +741,7 @@ public class UnquestionifyService extends NotificationListenerService {
                     watchHeight = Integer.parseInt(params.get("height"));
                 if (params.get("shape") != null)
                     isRound = params.get("shape").equals("round");
+                Log.d(TAG, "Watch Dimension:" + watchWidth + "x" + watchHeight + " pixels (round:" + isRound + ")");
                 // calculate proper width/height for round watches
                 if (isRound) {
                     // round screen, calculate max square inside the circle of diameter width
@@ -803,6 +804,7 @@ public class UnquestionifyService extends NotificationListenerService {
                         JSONObject o = new JSONObject();
                         o.put("id", n.id);
                         o.put("when", n.getWhen());
+                        o.put("pages", n.getDetailBitmapCount());
                         notif.put(o);
                         Log.d(TAG, "[list]" + n.toLogString());
                     }
@@ -859,38 +861,6 @@ public class UnquestionifyService extends NotificationListenerService {
                             createErrorJSONResponse("No such page").toString());
                 }
                 return new NanoHTTPD.Response(Response.Status.OK, "image/png", bitmapToInputStream(bitmap));
-            }
-
-            if (method == Method.GET && uri.startsWith("/notifications_details/")) {
-                if (!connected) {
-                    Log.e(TAG, "listener not ready yet");
-                    return new NanoHTTPD.Response(Response.Status.OK, "application/json",
-                            createErrorJSONResponse("Unavailable").toString());
-                }
-                notificationDetailQueryCount++;
-                String id = uri.substring("/notifications_details/".length());
-                WatchNotification notification = null;
-                for (final WatchNotification n : mNotifications) {
-                    if (n.id.equals(id)) {
-                        notification = n;
-                        break;
-                    }
-                }
-                if (notification == null) {
-                    Log.e(TAG, "no notification for id:" + id);
-                    return new NanoHTTPD.Response(Response.Status.BAD_REQUEST, "application/json",
-                            createErrorJSONResponse("no such notification").toString());
-                }
-
-                JSONObject json = new JSONObject();
-                try {
-                    json.put("pageCount", notification.getDetailBitmapCount());
-                } catch (JSONException e) {
-                    Log.e(TAG, "unable to create json object");
-                    return new NanoHTTPD.Response(Response.Status.INTERNAL_ERROR, "application/json",
-                            createErrorJSONResponse("unable to create response json").toString());
-                }
-                return new NanoHTTPD.Response(Response.Status.OK, "application/json", json.toString());
             }
 
             if (method == Method.DELETE && uri.startsWith("/notifications")) {
