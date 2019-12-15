@@ -38,6 +38,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -495,6 +497,13 @@ public class UnquestionifyService extends NotificationListenerService {
         mNotifications.add(0, new WatchNotification(getApplicationContext(), sbn.getKey(), getNotificationTitle(sbn),
                 notificationText, getAppName(sbn.getPackageName()),
                 sbn.getNotification().getSmallIcon(), sbn.getNotification().when));
+        // sort mNotifications by when descendingly
+        mNotifications.sort(Collections.reverseOrder(new Comparator<WatchNotification>() {
+            @Override
+            public int compare(WatchNotification a, WatchNotification b) {
+                return Long.compare(a.when, b.when);
+            }
+        }));
         lastUpdatedTS = System.currentTimeMillis();
         startWatchApp();
     }
