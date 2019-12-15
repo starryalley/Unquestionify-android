@@ -1,4 +1,4 @@
-package au.idv.markkuo.android.apps.messagespng;
+package idv.markkuo.unquestionify;
 
 import android.app.Notification;
 import android.content.BroadcastReceiver;
@@ -27,7 +27,6 @@ import com.garmin.android.connectiq.ConnectIQ;
 import com.garmin.android.connectiq.IQApp;
 import com.garmin.android.connectiq.IQDevice;
 import com.garmin.android.connectiq.exception.InvalidStateException;
-import com.garmin.android.connectiq.exception.ServiceUnavailableException;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -53,7 +52,7 @@ import ar.com.hjg.pngj.PngWriter;
 import ar.com.hjg.pngj.chunks.ChunkCopyBehaviour;
 import ar.com.hjg.pngj.chunks.PngChunkPLTE;
 
-public class MessagesPngService extends NotificationListenerService {
+public class UnquestionifyService extends NotificationListenerService {
     private final String TAG = this.getClass().getSimpleName();
 
     // for starting app on the watch
@@ -66,7 +65,7 @@ public class MessagesPngService extends NotificationListenerService {
 
     private boolean mOpenAppRequestInProgress = false;
 
-    private MessagePngServiceReceiver serviceReceiver;
+    private UnquestionifyServiceReceiver serviceReceiver;
     private boolean connected = false;
     private NotificationHTTPD server;
     private ArrayList<WatchNotification> mNotifications;
@@ -90,6 +89,9 @@ public class MessagesPngService extends NotificationListenerService {
     private static long totalBitmapBytes;
 
     private Handler statusReportHandler;
+
+    // for setting
+    private static final int defaultTextSize = 22; //24 is better for F6pro, 20 is fine on vivoactive 4s
 
     // how many pixels to enlarge the square inside the circle
     // 40 is better but a long text on F6Pro can result in a 2500-byte png which is too big
@@ -350,6 +352,11 @@ public class MessagesPngService extends NotificationListenerService {
         return preferences.getBoolean("nonascii", false);
     }
 
+    private boolean getGroupSimilarMessage() {
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+        return preferences.getBoolean("group_msg", false);
+    }
+
     private void saveAllowedSources() {
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
         SharedPreferences.Editor editor = preferences.edit();
@@ -360,15 +367,23 @@ public class MessagesPngService extends NotificationListenerService {
     @Override
     public void onCreate() {
         super.onCreate();
-        serviceReceiver = new MessagePngServiceReceiver();
+        serviceReceiver = new UnquestionifyServiceReceiver();
         IntentFilter filter = new IntentFilter();
-        filter.addAction("au.idv.markkuo.android.apps.messagespng.NOTIFICATION_LISTENER_SERVICE");
+        filter.addAction("idv.markkuo.unquestionify.NOTIFICATION_LISTENER_SERVICE");
         registerReceiver(serviceReceiver, filter);
 
         mNotifications = new ArrayList<>();
 
         loadAllowedApps();
         loadStatistics(getApplicationContext());
+
+        // save default textsize setting
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+        if (!preferences.contains("textsize")) {
+            SharedPreferences.Editor editor = preferences.edit();
+            editor.putString("textsize", Integer.toString(defaultTextSize));
+            editor.apply();
+        }
 
         // initialise CIQ
         mConnectIQ = ConnectIQ.getInstance(this, ConnectIQ.IQConnectType.WIRELESS);
@@ -456,17 +471,22 @@ public class MessagesPngService extends NotificationListenerService {
 
         lastNotificationWhen.put(sbn.getKey(), sbn.getNotification().when);
         totalNotificationCount++;
-        for (int i = 0; i < mNotifications.size(); i++) {
-            WatchNotification n = mNotifications.get(i);
-            if (n.key.equals(sbn.getKey()) && n.title.equals(getNotificationTitle(sbn))) {
-                // add to existing
-                n.appendMessage(notificationText);
-                // move this to queue start
-                mNotifications.add(0, mNotifications.remove(i));
-                Log.d(TAG, "[append] [" + sbn.getPackageName() + "]:" + sbn.getNotification().tickerText + " (flag:" + sbn.getNotification().flags + ")");
-                lastUpdatedTS = System.currentTimeMillis();
-                startWatchApp();
-                return;
+
+        //use appending to existing notification if we want to group similar message
+        if (getGroupSimilarMessage()) {
+            for (int i = 0; i < mNotifications.size(); i++) {
+                WatchNotification n = mNotifications.get(i);
+                // similar message is defined as having the same StatusBarNotification key and same notification title
+                if (n.key.equals(sbn.getKey()) && n.title.equals(getNotificationTitle(sbn))) {
+                    // add to existing
+                    n.appendMessage(notificationText);
+                    // move this to queue start
+                    mNotifications.add(0, mNotifications.remove(i));
+                    Log.d(TAG, "[append] [" + sbn.getPackageName() + "]:" + sbn.getNotification().tickerText + " (flag:" + sbn.getNotification().flags + ")");
+                    lastUpdatedTS = System.currentTimeMillis();
+                    startWatchApp();
+                    return;
+                }
             }
         }
 
@@ -532,7 +552,7 @@ public class MessagesPngService extends NotificationListenerService {
         Log.v(TAG, "Listener connected");
 
         // get current notification
-        for (StatusBarNotification sbn : MessagesPngService.this.getActiveNotifications()) {
+        for (StatusBarNotification sbn : UnquestionifyService.this.getActiveNotifications()) {
             if (mAllowedSources.contains(sbn.getPackageName()))
                 addNotification(sbn);
         }
@@ -545,8 +565,8 @@ public class MessagesPngService extends NotificationListenerService {
         }
         if (mOpenAppRequestInProgress)
             return;
-        if (mCIQApp.getStatus() != IQApp.IQAppStatus.INSTALLED)
-            return;
+        //if (mCIQApp.getStatus() != IQApp.IQAppStatus.INSTALLED)
+        //    return;
         mOpenAppRequestInProgress = true;
         Log.i(TAG, "starting watch app");
         final Handler handler = new Handler(Looper.getMainLooper());
@@ -602,20 +622,20 @@ public class MessagesPngService extends NotificationListenerService {
         }
         Log.v(TAG, "Broadcasting service status");
         // send broadcast
-        Intent i = new Intent("au.idv.markkuo.android.apps.messagespng.NOTIFICATION_LISTENER_SERVICE_STATUS");
+        Intent i = new Intent("idv.markkuo.unquestionify.NOTIFICATION_LISTENER_SERVICE_STATUS");
         i.putExtra("service_status", o.toString());
         sendBroadcast(i);
         // save current statistics
         saveStatistics(getApplicationContext());
     }
 
-    private class MessagePngServiceReceiver extends BroadcastReceiver{
+    private class UnquestionifyServiceReceiver extends BroadcastReceiver{
 
         @Override
         public void onReceive(Context context, Intent intent) {
             String command = intent.getStringExtra("command");
             if(command.equals("addApp")) {
-                //MessagesPngService.this.cancelAllNotifications();
+                //UnquestionifyService.this.cancelAllNotifications();
                 String packageName = intent.getStringExtra("app");
                 if (!packageName.equals("")) {
                     mAllowedSources.add(packageName);

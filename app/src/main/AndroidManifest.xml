@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="au.idv.markkuo.android.apps.messagespng"
+    package="idv.markkuo.unquestionify"
     android:versionCode="1"
     android:versionName="1.0" >
 
@@ -12,7 +12,7 @@
         android:label="@string/app_name"
         android:theme="@style/AppTheme" >
         <activity
-            android:name="au.idv.markkuo.android.apps.messagespng.MainActivity"
+            android:name="idv.markkuo.unquestionify.MainActivity"
             android:label="@string/app_name" >
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -20,11 +20,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity android:name=".AppNotificationListActivity"
+        <activity android:name="idv.markkuo.unquestionify.AppNotificationListActivity"
             android:label="@string/app_name" />
-        <activity android:name=".NotificationSettingsActivity"
+        <activity android:name="idv.markkuo.unquestionify.NotificationSettingsActivity"
             android:label="@string/app_name" />
-        <service android:name="au.idv.markkuo.android.apps.messagespng.MessagesPngService"
+        <service android:name="idv.markkuo.unquestionify.UnquestionifyService"
             android:label="@string/service_name"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter>

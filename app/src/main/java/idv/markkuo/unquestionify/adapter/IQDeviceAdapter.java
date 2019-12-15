@@ -1,4 +1,4 @@
-package au.idv.markkuo.android.apps.messagespng.adapter;
+package idv.markkuo.unquestionify.adapter;
 
 import java.util.List;
 

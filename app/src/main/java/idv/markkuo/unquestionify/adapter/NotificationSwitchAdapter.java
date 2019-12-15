@@ -1,4 +1,4 @@
-package au.idv.markkuo.android.apps.messagespng.adapter;
+package idv.markkuo.unquestionify.adapter;
 
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -13,9 +13,9 @@ import android.widget.TextView;
 import java.util.ArrayList;
 import java.util.List;
 
-import au.idv.markkuo.android.apps.messagespng.NotificationApp;
-import au.idv.markkuo.android.apps.messagespng.AppNotificationListActivity;
-import au.idv.markkuo.android.apps.messagespng.R;
+import idv.markkuo.unquestionify.NotificationApp;
+import idv.markkuo.unquestionify.AppNotificationListActivity;
+import idv.markkuo.unquestionify.R;
 
 public class NotificationSwitchAdapter extends ArrayAdapter<NotificationApp> {
     private ArrayList<Integer> checkedRows;

@@ -10,6 +10,10 @@
             app:key="nonascii"
             app:title="Non-ASCII messages only"/>
 
+        <SwitchPreferenceCompat
+            app:key="group_msg"
+            app:title="Group similar messages"/>
+
         <EditTextPreference
             app:key="textsize"
             app:title="Text Height on watch (pixels)"

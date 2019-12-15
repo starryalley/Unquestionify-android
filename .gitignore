@@ -1,4 +1,7 @@
 # from https://raw.githubusercontent.com/github/gitignore/master/Android.gitignore
+
+.DS_Store
+
 # Built application files
 *.apk
 *.aar

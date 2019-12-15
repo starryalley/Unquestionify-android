@@ -1,4 +1,4 @@
-package au.idv.markkuo.android.apps.messagespng.adapter;
+package idv.markkuo.unquestionify.adapter;
 
 import android.content.Context;
 import android.util.Pair;
@@ -10,7 +10,7 @@ import android.widget.TextView;
 
 import java.util.List;
 
-import au.idv.markkuo.android.apps.messagespng.R;
+import idv.markkuo.unquestionify.R;
 
 public class StatisticsAdapter extends ArrayAdapter<Pair<String, String>> {
 

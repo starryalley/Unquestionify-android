@@ -1,4 +1,4 @@
-package au.idv.markkuo.android.apps.messagespng;
+package idv.markkuo.unquestionify;
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -23,7 +23,7 @@ import java.util.Vector;
 // abstraction of a notification
 public class WatchNotification {
     private final String TAG = this.getClass().getSimpleName();
-    private static final int defaultTextSize = 24; //24 is better for F6pro, 20 is fine on vivoactive 4s
+
     private Bitmap overviewBitmap;
     private Vector<Bitmap> pageBitmaps;
     private static int width = 260, height = 260;
@@ -55,7 +55,7 @@ public class WatchNotification {
 
     private int getTextSize() {
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context.getApplicationContext());
-        return Integer.parseInt(preferences.getString("textsize", Integer.toString(defaultTextSize)));
+        return Integer.parseInt(preferences.getString("textsize", "22"));
     }
 
     public String toString() {

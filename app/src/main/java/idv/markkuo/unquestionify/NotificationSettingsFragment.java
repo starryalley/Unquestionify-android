@@ -1,4 +1,4 @@
-package au.idv.markkuo.android.apps.messagespng;
+package idv.markkuo.unquestionify;
 
 import android.os.Bundle;
 import android.text.InputType;
@@ -53,7 +53,7 @@ public class NotificationSettingsFragment extends PreferenceFragmentCompat {
                 @Override
                 public boolean onPreferenceClick(Preference preference) {
                     Log.d(TAG, "Reset statistics");
-                    MessagesPngService.resetStatistics(getActivity().getApplicationContext());
+                    UnquestionifyService.resetStatistics(getActivity().getApplicationContext());
                     return true;
                 }
             });

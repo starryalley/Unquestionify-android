@@ -2,7 +2,7 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
-    tools:context="au.idv.markkuo.android.apps.messagespng.MainActivity" >
+    tools:context="idv.markkuo.unquestionify.MainActivity" >
 
     <item
         android:id="@+id/select_notify_apps"

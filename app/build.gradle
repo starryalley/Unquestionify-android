@@ -5,7 +5,7 @@ android {
     buildToolsVersion '28.0.3'
 
     defaultConfig {
-        applicationId "au.idv.markkuo.android.apps.messagespng"
+        applicationId "idv.markkuo.unquestionify"
         minSdkVersion 26
         targetSdkVersion 26
     }

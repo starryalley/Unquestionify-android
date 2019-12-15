@@ -1,4 +1,4 @@
-package au.idv.markkuo.android.apps.messagespng;
+package idv.markkuo.unquestionify;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -21,7 +21,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 
-import au.idv.markkuo.android.apps.messagespng.adapter.NotificationSwitchAdapter;
+import idv.markkuo.unquestionify.adapter.NotificationSwitchAdapter;
 
 public class AppNotificationListActivity extends AppCompatActivity {
 
@@ -68,7 +68,7 @@ public class AppNotificationListActivity extends AppCompatActivity {
 
     public void updateEnabledApp(String appPackage, boolean enabled) {
         Intent intent = new Intent();
-        intent.setAction("au.idv.markkuo.android.apps.messagespng.NOTIFICATION_LISTENER_SERVICE");
+        intent.setAction("idv.markkuo.unquestionify.NOTIFICATION_LISTENER_SERVICE");
         if (enabled)
             intent.putExtra("command", "addApp");
         else

@@ -1,4 +1,4 @@
-package au.idv.markkuo.android.apps.messagespng;
+package idv.markkuo.unquestionify;
 
 import android.app.Dialog;
 import android.content.BroadcastReceiver;
@@ -42,8 +42,8 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-import au.idv.markkuo.android.apps.messagespng.adapter.IQDeviceAdapter;
-import au.idv.markkuo.android.apps.messagespng.adapter.StatisticsAdapter;
+import idv.markkuo.unquestionify.adapter.IQDeviceAdapter;
+import idv.markkuo.unquestionify.adapter.StatisticsAdapter;
 
 public class MainActivity extends AppCompatActivity {
     private ConnectIQ mConnectIQ;
@@ -102,7 +102,7 @@ public class MainActivity extends AppCompatActivity {
 
         receiver = new MainActivityReceiver();
         IntentFilter filter = new IntentFilter();
-        filter.addAction("au.idv.markkuo.android.apps.messagespng.NOTIFICATION_LISTENER_SERVICE_STATUS");
+        filter.addAction("idv.markkuo.unquestionify.NOTIFICATION_LISTENER_SERVICE_STATUS");
         registerReceiver(receiver, filter);
 
         mConnectIQ = ConnectIQ.getInstance();
@@ -191,7 +191,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         Intent intent = new Intent();
-        intent.setAction("au.idv.markkuo.android.apps.messagespng.NOTIFICATION_LISTENER_SERVICE");
+        intent.setAction("idv.markkuo.unquestionify.NOTIFICATION_LISTENER_SERVICE");
         intent.putExtra("command", "stopStatusReport");
         sendBroadcast(intent);
     }
@@ -203,7 +203,7 @@ public class MainActivity extends AppCompatActivity {
             loadDevices();
 
         Intent intent = new Intent();
-        intent.setAction("au.idv.markkuo.android.apps.messagespng.NOTIFICATION_LISTENER_SERVICE");
+        intent.setAction("idv.markkuo.unquestionify.NOTIFICATION_LISTENER_SERVICE");
         intent.putExtra("command", "startStatusReport");
         sendBroadcast(intent);
     }

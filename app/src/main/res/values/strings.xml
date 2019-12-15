@@ -1,24 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
-    <string name="app_name">Messages.png</string>
-    <string name="service_name">Messages.png Service</string>
+    <string name="app_name">Unquestionify</string>
+    <string name="service_name">Unquestionify Service</string>
 
     <string name="connected_device">Connected CIQ Devices</string>
 
     <string name="initialization_error">Failed to initialize the SDK.\n</string>
     <string name="service_unavailable">The ConnectIQ service is unavailable.</string>
 
-    <string name="missing_widget">Missing Messages.png App</string>
-    <string name="missing_widget_message">The Messages.png App used with this application is not installed on your ConnectIQ device. Please install the app and try again.</string>
+    <string name="missing_widget_message">The Unquestionify App used with this application is not installed on your ConnectIQ device. Please install the app and try again.</string>
 
     <string name="needs_permission">Needs Notification Access Permission</string>
-    <string name="needs_permission_detail">This app needs notification access permission to be able to read other App\'s notification. Click on \"Go to Settings\" and grant permission.</string>
+    <string name="needs_permission_detail">Unquestionify needs notification access permission to be able to read other App\'s notification. Click on \"Go to Settings\" and grant permission.</string>
     <string name="go_to_settings">Go to Settings</string>
 
     <string name="select_notify">App Notifications</string>
     <string name="settings">App Settings</string>
     <string name="select_notify_app">Select which applications can send notifications as images</string>
 
-    <string name="loading_app">Loading installed Apps...</string>
+    <string name="loading_app">Loading installed Apps…</string>
 </resources>
