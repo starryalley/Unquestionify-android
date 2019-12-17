@@ -58,7 +58,7 @@ public class UnquestionifyService extends NotificationListenerService {
     private final String TAG = this.getClass().getSimpleName();
 
     // for starting app on the watch
-    private static final String CIQ_APP = "c569ccc1-be51-4860-bbcd-2b45a138d64b";
+    private static final String CIQ_APP = "c2842d1b-ad5c-47c6-b28f-cc495abd7d32";
     private ConnectIQ mConnectIQ;
     private boolean mCIQReady = false;
 
@@ -98,6 +98,34 @@ public class UnquestionifyService extends NotificationListenerService {
     // how many pixels to enlarge the square inside the circle
     // 40 is better but a long text on F6Pro can result in a 2500-byte png which is too big
     private static final int defaultSquareWidthOffset = 20;
+
+    // if there is any pending request to start watchapp, this will be true
+    private boolean pendingStartApp = false;
+    private ConnectIQ.ConnectIQListener mCIQListener = new ConnectIQ.ConnectIQListener() {
+
+        @Override
+        public void onInitializeError(ConnectIQ.IQSdkErrorStatus errStatus) {
+            Log.e(TAG, "initializing CIQ SDK error:" + errStatus.name());
+            mCIQReady = false;
+        }
+
+        @Override
+        public void onSdkReady() {
+            Log.i(TAG, "initializing CIQ SDK done");
+            loadCIQDevices();
+            mCIQReady = true;
+            if (pendingStartApp) {
+                startWatchApp();
+                pendingStartApp = false;
+            }
+        }
+
+        @Override
+        public void onSdkShutDown() {
+            mCIQReady = false;
+        }
+
+    };
 
     private ConnectIQ.IQOpenApplicationListener mCIQOpenAppListener = new ConnectIQ.IQOpenApplicationListener() {
         @Override
@@ -390,27 +418,7 @@ public class UnquestionifyService extends NotificationListenerService {
         // initialise CIQ
         mConnectIQ = ConnectIQ.getInstance(this, ConnectIQ.IQConnectType.WIRELESS);
         // Initialize the SDK
-        mConnectIQ.initialize(this, true, new ConnectIQ.ConnectIQListener() {
-
-            @Override
-            public void onInitializeError(ConnectIQ.IQSdkErrorStatus errStatus) {
-                Log.e(TAG, "initializing CIQ SDK error:" + errStatus.name());
-                mCIQReady = false;
-            }
-
-            @Override
-            public void onSdkReady() {
-                Log.i(TAG, "initializing CIQ SDK done");
-                loadCIQDevices();
-                mCIQReady = true;
-            }
-
-            @Override
-            public void onSdkShutDown() {
-                mCIQReady = false;
-            }
-
-        });
+        mConnectIQ.initialize(this, true, mCIQListener);
 
         mCIQApp = new IQApp(CIQ_APP);
 
@@ -569,7 +577,9 @@ public class UnquestionifyService extends NotificationListenerService {
 
     private void startWatchApp() {
         if (!mCIQReady) {
-            Log.w(TAG, "CIQ not ready, not starting watch app");
+            pendingStartApp = true;
+            mConnectIQ.initialize(this, true, mCIQListener);
+            Log.w(TAG, "CIQ not ready, re-initialise CIQ now");
             return;
         }
         if (mOpenAppRequestInProgress)
@@ -722,11 +732,11 @@ public class UnquestionifyService extends NotificationListenerService {
             Method method = session.getMethod();
             String uri = session.getUri();
 
-//            if (!session.getHeaders().get("remote-addr").equals("127.0.0.1")) {
-//                Log.e(TAG, "forbidding connection other than localhost. Incoming address:" + session.getHeaders().get("remote-addr"));
-//                forbiddenCount++;
-//                return new NanoHTTPD.Response(Response.Status.FORBIDDEN, MIME_PLAINTEXT, "SERVICE FORBIDDEN");
-//            }
+            if (!session.getHeaders().get("remote-addr").equals("127.0.0.1")) {
+                Log.e(TAG, "forbidding connection other than localhost. Incoming address:" + session.getHeaders().get("remote-addr"));
+                forbiddenCount++;
+                return new NanoHTTPD.Response(Response.Status.FORBIDDEN, MIME_PLAINTEXT, "SERVICE FORBIDDEN");
+            }
 
             Map<String, String> params = session.getParms();
             Map<String, String> headers = session.getHeaders();

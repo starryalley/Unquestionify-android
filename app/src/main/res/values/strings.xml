@@ -3,7 +3,7 @@
     <string name="app_name">Unquestionify</string>
     <string name="service_name">Unquestionify Service</string>
 
-    <string name="connected_device">Connected CIQ Devices</string>
+    <string name="connected_device">Known CIQ Devices</string>
 
     <string name="initialization_error">Failed to initialize the SDK.\n</string>
     <string name="service_unavailable">The ConnectIQ service is unavailable.</string>
