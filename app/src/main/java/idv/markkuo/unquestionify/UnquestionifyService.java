@@ -813,6 +813,28 @@ public class UnquestionifyService extends NotificationListenerService {
             // ok, we have permission. Let's proceed
             scheduleSessionExpire();
 
+            if (method == Method.GET && uri.equals("/notification_summary")) {
+                if (mNotifications.size() == 0) {
+                    return new NanoHTTPD.Response(Response.Status.OK, "image/png",
+                            bitmapToInputStream(createBitmapFromText("No Notification")));
+                }
+                int width = 172, height = 40, textSize = 19;
+                if (params.get("width") != null)
+                    width = Integer.parseInt(params.get("width"));
+                if (params.get("height") != null)
+                    height = Integer.parseInt(params.get("height"));
+                if (params.get("textSize") != null)
+                    textSize = Integer.parseInt(params.get("textSize"));
+
+                Bitmap bitmap = mNotifications.get(0).getSummaryBitmap(width, height, textSize);
+                if (bitmap == null) {
+                    Log.w(TAG, "request for summary image failed");
+                    return new NanoHTTPD.Response(Response.Status.OK, "image/png",
+                            bitmapToInputStream(createBitmapFromText("Error")));
+                }
+                return new NanoHTTPD.Response(Response.Status.OK, "image/png", bitmapToInputStream(bitmap));
+            }
+
             if (method == Method.GET && uri.equals("/notifications")) {
                 notificationQueryCount++;
                 // create JSON
