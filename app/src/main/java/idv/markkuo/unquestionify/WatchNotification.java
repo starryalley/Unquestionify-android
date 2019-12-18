@@ -27,6 +27,7 @@ import java.util.Vector;
 public class WatchNotification {
     private final String TAG = this.getClass().getSimpleName();
 
+    private Bitmap summaryBitmap;
     private Bitmap overviewBitmap;
     private Vector<Bitmap> pageBitmaps;
     private boolean hasDetail = false;
@@ -71,6 +72,14 @@ public class WatchNotification {
         sb.append("[").append(appName).append("]\n").append(title);
         for (int i = (msg.size() - 3) < 0 ? 0 : msg.size() - 3; i < msg.size(); i++)
             sb.append("\n").append(msg.get(i));
+        return sb.toString();
+    }
+
+    String toSummaryString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("[").append(appName).append("] ").append(title);
+        for (int i = (msg.size() - 3) < 0 ? 0 : msg.size() - 3; i < msg.size(); i++)
+            sb.append("\n").append(msg.get(i).replaceAll("\n", "\t"));
         return sb.toString();
     }
 
@@ -143,6 +152,12 @@ public class WatchNotification {
         return null;
     }
 
+    Bitmap getSummaryBitmap(int width, int height, int textSize) {
+        // always re-build summary bitmap
+        _buildSummaryBitmap(width, height, textSize);
+        return summaryBitmap;
+    }
+
     String getWhen() {
         long now = System.currentTimeMillis();
         if (when != 0 && now > when) {
@@ -157,8 +172,14 @@ public class WatchNotification {
         return DateFormat.getTimeInstance(DateFormat.SHORT).format(new Date(when));
     }
 
+    private void _buildSummaryBitmap(int width, int height, int textSize) {
+        Log.d(TAG, "building summary bitmap of " + width + "x" + height + " text size:" + textSize);
+        Pair<Bitmap, Integer> p = _doTextLayout(toSummaryString(), width, height, 2, textSize, false);
+        summaryBitmap = p.first;
+    }
+
     private void _buildOverviewBitmap() {
-        Pair<Bitmap, Integer> p = _doTextLayout(toString(), width, height, 3);
+        Pair<Bitmap, Integer> p = _doTextLayout(toString(), width, height, 3, getTextSize(), true);
         hasDetail = !(p.second == 0);
         overviewBitmap = p.first;
     }
@@ -168,11 +189,13 @@ public class WatchNotification {
         if (!hasDetail)
             return;
         //_buildBitmaps(toString(), width, height);
-        int maxLines = height / (getTextSize() + 2) - 1; //TODO: i don't know the spacing, just use +2
+        int size = getTextSize();
+        int maxLines = height / (size + 2) - 1; //TODO: i don't know the spacing, just use +2
         Log.d(TAG, "building detail message bitmaps...");
         String text = toString();
+
         while (true) {
-            Pair<Bitmap, Integer> p = _doTextLayout(text, width, height, maxLines);
+            Pair<Bitmap, Integer> p = _doTextLayout(text, width, height, maxLines, size, true);
             pageBitmaps.add(p.first);
             // no next page
             if (p.second == 0)
@@ -183,13 +206,13 @@ public class WatchNotification {
     }
 
     // return bitmap and the next page's offset
-    private Pair<Bitmap, Integer> _doTextLayout(String text, int width, int height, int maxLines) {
+    private Pair<Bitmap, Integer> _doTextLayout(String text, int width, int height, int maxLines, int textSize, boolean center) {
         Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
 
         TextPaint textPaint=new TextPaint();
         textPaint.setColor(Color.WHITE);
-        textPaint.setTextSize(getTextSize());
+        textPaint.setTextSize(textSize);
 
         Rect rect = new Rect();
         textPaint.getTextBounds(text, 0, text.length(), rect);
@@ -200,10 +223,11 @@ public class WatchNotification {
         // do static text layout
         int layoutHeight = height;
         StaticLayout textLayout = StaticLayout.Builder.obtain(text, 0, text.length(), textPaint, width)
-                .setAlignment(Layout.Alignment.ALIGN_CENTER)
+                .setAlignment(center ? Layout.Alignment.ALIGN_CENTER : Layout.Alignment.ALIGN_NORMAL)
                 .setMaxLines(maxLines) // we need to calculate this properly for ellipsizing (ellipsis) to work
                 .setEllipsize(TextUtils.TruncateAt.END)
                 .build();
+
         Log.v(TAG, "[_doTextLayout] max lines:" + maxLines);
 
         // get height of multiline text layout
