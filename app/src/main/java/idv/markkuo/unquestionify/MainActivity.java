@@ -198,16 +198,18 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onPause() {
         super.onPause();
-        try {
-            List<IQDevice> devices = mConnectIQ.getKnownDevices();
-            if (devices != null) {
-                deviceAdapter.setDevices(devices);
-                for (IQDevice device : devices) {
-                    mConnectIQ.unregisterForDeviceEvents(device);
+        if (mSdkReady) {
+            try {
+                List<IQDevice> devices = mConnectIQ.getKnownDevices();
+                if (devices != null) {
+                    deviceAdapter.setDevices(devices);
+                    for (IQDevice device : devices) {
+                        mConnectIQ.unregisterForDeviceEvents(device);
+                    }
                 }
+            } catch (Exception e) {
+                Log.e(TAG, "unregistering failed:" + e);
             }
-        } catch (Exception e) {
-            Log.e(TAG, "unregistering failed:" + e);
         }
 
         Intent intent = new Intent();
