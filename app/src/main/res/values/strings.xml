@@ -3,7 +3,7 @@
     <string name="app_name">Unquestionify</string>
     <string name="service_name">Unquestionify Service</string>
 
-    <string name="connected_device">Known CIQ Devices</string>
+    <string name="connected_device">Known Garmin CIQ Devices</string>
 
     <string name="initialization_error">Failed to initialize the SDK.\n</string>
     <string name="service_unavailable">The ConnectIQ service is unavailable.</string>
@@ -14,9 +14,9 @@
     <string name="needs_permission_detail">Unquestionify needs notification access permission to be able to read other App\'s notification. Click on \"Go to Settings\" and grant permission.</string>
     <string name="go_to_settings">Go to Settings</string>
 
-    <string name="select_notify">App Notifications</string>
-    <string name="settings">App Settings</string>
-    <string name="select_notify_app">Select which applications can send notifications as images</string>
+    <string name="select_notify">Select Notification Apps</string>
+    <string name="settings">Unquestionify Settings</string>
+    <string name="select_notify_app">Select which applications can send notifications to watch</string>
 
     <string name="loading_app">Loading installed Apps… \nIt may take a few seconds or more depending on number of installed Apps.</string>
 </resources>

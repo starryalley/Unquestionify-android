@@ -12,7 +12,7 @@
 
         <SwitchPreferenceCompat
             app:key="group_msg"
-            app:title="Group similar messages"/>
+            app:title="Append to old messages"/>
 
         <EditTextPreference
             app:key="textsize"
@@ -39,7 +39,7 @@
             app:summary="Report issues or suggest new features">
             <intent
                 android:action="android.intent.action.VIEW"
-                android:data="mailto:starryalley@gmail.com?subject=Suggestion to Messages.png App" />
+                android:data="mailto:starryalley@gmail.com?subject=Suggestion to Unquestionify App" />
         </Preference>
     </PreferenceCategory>
 </PreferenceScreen>
