@@ -16,6 +16,7 @@ import android.graphics.Rect;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Message;
 import android.preference.PreferenceManager;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
@@ -78,6 +79,15 @@ public class UnquestionifyService extends NotificationListenerService {
     private String sessionId;
     private Handler sessionExpireHandler;
 
+    // for message types
+    // Message tags
+    private static final int MSG_STARTUP = 1;
+    private static final int MSG_POSTED = 2;
+    private static final int MSG_REMOVED = 3;
+    private static final int MSG_ORDER = 4;
+    private static final int MSG_DISMISS = 5;
+
+
     // for statistics
     private static int sessionCount;
     private static int promptShownCount;
@@ -101,7 +111,7 @@ public class UnquestionifyService extends NotificationListenerService {
 
     // if there is any pending request to start watchapp, this will be true
     private boolean pendingStartApp = false;
-    private ConnectIQ.ConnectIQListener mCIQListener = new ConnectIQ.ConnectIQListener() {
+    private final ConnectIQ.ConnectIQListener mCIQListener = new ConnectIQ.ConnectIQListener() {
 
         @Override
         public void onInitializeError(ConnectIQ.IQSdkErrorStatus errStatus) {
@@ -112,6 +122,7 @@ public class UnquestionifyService extends NotificationListenerService {
         @Override
         public void onSdkReady() {
             Log.i(TAG, "initializing CIQ SDK done");
+            mOpenAppRequestInProgress = false;
             loadCIQDevices();
             mCIQReady = true;
             if (pendingStartApp) {
@@ -127,7 +138,7 @@ public class UnquestionifyService extends NotificationListenerService {
 
     };
 
-    private ConnectIQ.IQOpenApplicationListener mCIQOpenAppListener = new ConnectIQ.IQOpenApplicationListener() {
+    private final ConnectIQ.IQOpenApplicationListener mCIQOpenAppListener = new ConnectIQ.IQOpenApplicationListener() {
         @Override
         public void onOpenApplicationResponse(IQDevice device, IQApp app, ConnectIQ.IQOpenApplicationStatus status) {
             Log.i(TAG, "CIQ App status:" + status.name());
@@ -138,6 +149,13 @@ public class UnquestionifyService extends NotificationListenerService {
 
             // clear the flag
             mOpenAppRequestInProgress = false;
+        }
+    };
+
+    private final Comparator<WatchNotification> mNotificationComparator = new Comparator<WatchNotification>() {
+        @Override
+        public int compare(WatchNotification a, WatchNotification b) {
+            return Long.compare(a.when, b.when);
         }
     };
 
@@ -486,25 +504,31 @@ public class UnquestionifyService extends NotificationListenerService {
         if (getGroupSimilarMessage()) {
             for (int i = 0; i < mNotifications.size(); i++) {
                 WatchNotification n = mNotifications.get(i);
-                // similar message is defined as having the same StatusBarNotification key and same notification title
-                if (n.key.equals(sbn.getKey()) && n.title.equals(getNotificationTitle(sbn))) {
+                // similar message is defined as having the same StatusBarNotification key //and same notification title
+                //if (n.key.equals(sbn.getKey()) && n.title.equals(getNotificationTitle(sbn))) {
+                if (n.key.equals(sbn.getKey())) {
                     // add to existing
                     n.appendMessage(notificationText, sbn.getNotification().when);
                     // move this to queue start
                     mNotifications.add(0, mNotifications.remove(i));
-                    Log.d(TAG, "[append] [" + sbn.getPackageName() + "]:" + sbn.getNotification().tickerText + " (flag:" + sbn.getNotification().flags + ")");
+                    Log.d(TAG, "[append]" + n.toLogString());
                     lastUpdatedTS = System.currentTimeMillis();
                     startWatchApp();
                     return;
                 }
             }
+        } else {
+            // when not grouping, let's remove previous notification with same key
+            Log.d(TAG, "try to remove old notification");
+            removeNotification(sbn);
         }
 
         // doesn't exists, let's add to the beginning of the list
-        Log.d(TAG, "[add] [" + sbn.getPackageName() + "]:" + sbn.getNotification().tickerText + " (flag:" + sbn.getNotification().flags + ")");
         mNotifications.add(0, new WatchNotification(getApplicationContext(), sbn.getKey(), getNotificationTitle(sbn),
                 notificationText, getAppName(sbn.getPackageName()),
                 sbn.getNotification().getSmallIcon(), sbn.getNotification().when));
+        Log.d(TAG, "[add]" + mNotifications.get(0).toLogString());
+        /*
         // sort mNotifications by when descendingly
         mNotifications.sort(Collections.reverseOrder(new Comparator<WatchNotification>() {
             @Override
@@ -512,6 +536,7 @@ public class UnquestionifyService extends NotificationListenerService {
                 return Long.compare(a.when, b.when);
             }
         }));
+        */
         lastUpdatedTS = System.currentTimeMillis();
         startWatchApp();
     }
@@ -519,33 +544,13 @@ public class UnquestionifyService extends NotificationListenerService {
     private void removeNotification(StatusBarNotification sbn) {
         for (int i = 0; i < mNotifications.size(); i++) {
             WatchNotification n = mNotifications.get(i);
-            if (n.key.equals(sbn.getKey()) && n.title.equals(getNotificationTitle(sbn))) {
+            //if (n.key.equals(sbn.getKey()) && n.title.equals(getNotificationTitle(sbn))) {
+            if (n.key.equals(sbn.getKey())) {
                 mNotifications.remove(i);
                 lastNotificationWhen.remove(n.key);
-                Log.d(TAG, "[remove] [" + sbn.getPackageName() + "]:" + sbn.getNotification().tickerText + " (flag:" + sbn.getNotification().flags + ")");
+                Log.d(TAG, "[remove]" + n.toLogString());
                 lastUpdatedTS = System.currentTimeMillis();
             }
-        }
-    }
-
-    @Override
-    public void onNotificationPosted(StatusBarNotification sbn) {
-        super.onNotificationPosted(sbn);
-        if (!mAllowedSources.contains(sbn.getPackageName())) {
-            return;
-        }
-
-        Log.v(TAG, "onNotificationPosted " + sbn.getNotification().tickerText + "\t" + getNotificationText(sbn) + "(" + sbn.getPackageName() + ")");
-        // add this notification
-        addNotification(sbn);
-    }
-
-    @Override
-    public void onNotificationRemoved(StatusBarNotification sbn) {
-        super.onNotificationRemoved(sbn);
-        if (mAllowedSources.contains(sbn.getPackageName())) {
-            Log.v(TAG, "onNotificationRemoved " + sbn.getNotification().tickerText + "\t" + getNotificationText(sbn) + "(" + sbn.getPackageName() + ")");
-            removeNotification(sbn);
         }
     }
 
@@ -567,23 +572,48 @@ public class UnquestionifyService extends NotificationListenerService {
     public void onListenerConnected () {
         connected = true;
         Log.v(TAG, "Listener connected");
+        Message.obtain(mNotificationHandler, MSG_STARTUP).sendToTarget();
+    }
 
-        // get current notification
-        for (StatusBarNotification sbn : UnquestionifyService.this.getActiveNotifications()) {
-            if (mAllowedSources.contains(sbn.getPackageName()))
-                addNotification(sbn);
+    @Override
+    public void onNotificationRankingUpdate(RankingMap rankingMap) {
+        Message.obtain(mNotificationHandler, MSG_ORDER).sendToTarget();
+    }
+
+    @Override
+    public void onNotificationPosted(StatusBarNotification sbn) {
+        super.onNotificationPosted(sbn);
+        if (!mAllowedSources.contains(sbn.getPackageName())) {
+            return;
         }
+
+        Message.obtain(mNotificationHandler, MSG_POSTED, sbn).sendToTarget();
+        Log.v(TAG, "onNotificationPosted " + sbn.getNotification().tickerText + "\t" + getNotificationText(sbn) + "(" + sbn.getPackageName() + ")");
+        //addNotification(sbn);
+    }
+
+    @Override
+    public void onNotificationRemoved(StatusBarNotification sbn) {
+        super.onNotificationRemoved(sbn);
+        if (!mAllowedSources.contains(sbn.getPackageName())) {
+            return;
+        }
+
+        Message.obtain(mNotificationHandler, MSG_REMOVED, sbn).sendToTarget();
+        Log.v(TAG, "onNotificationRemoved " + sbn.getNotification().tickerText + "\t" + getNotificationText(sbn) + "(" + sbn.getPackageName() + ")");
+        //removeNotification(sbn);
     }
 
     private void startWatchApp() {
+        if (mOpenAppRequestInProgress)
+            return;
         if (!mCIQReady) {
             pendingStartApp = true;
             mConnectIQ.initialize(this, true, mCIQListener);
+            mOpenAppRequestInProgress = true;
             Log.w(TAG, "CIQ not ready, re-initialise CIQ now");
             return;
         }
-        if (mOpenAppRequestInProgress)
-            return;
         //if (mCIQApp.getStatus() != IQApp.IQAppStatus.INSTALLED)
         //    return;
         mOpenAppRequestInProgress = true;
@@ -606,6 +636,10 @@ public class UnquestionifyService extends NotificationListenerService {
                 mConnectIQ.openApplication(mCIQDevice, mCIQApp, mCIQOpenAppListener);
             else
                 Log.w(TAG, "CIQ Device not present");
+        } catch (InvalidStateException e) {
+            // SDK becomes uninitialised. Redo it
+            pendingStartApp = true;
+            mConnectIQ.initialize(this, true, mCIQListener);
         } catch (Exception e) {
             Log.e(TAG, "openApplication failed:" + e);
         }
@@ -708,6 +742,72 @@ public class UnquestionifyService extends NotificationListenerService {
             }
         }, 1000 * 60 * 3); // 3 min
     }
+
+    private void fetchActive() {
+        // get current notification
+        for (StatusBarNotification sbn : UnquestionifyService.this.getActiveNotifications()) {
+            if (mAllowedSources.contains(sbn.getPackageName()))
+                addNotification(sbn);
+        }
+        Collections.sort(mNotifications, Collections.reverseOrder(mNotificationComparator));
+        // debugging only below
+        for (WatchNotification n: mNotifications) {
+            Log.d(TAG, "[active notification] " + n.toLogString());
+        }
+    }
+
+    private final Handler mNotificationHandler = new NotificationHandler();
+
+    private class NotificationHandler extends Handler {
+        @Override
+        public void handleMessage(Message msg) {
+            StatusBarNotification sbn = null;
+            if (msg.obj instanceof StatusBarNotification) {
+                sbn = (StatusBarNotification) msg.obj;
+            }
+
+            switch (msg.what) {
+                case MSG_STARTUP:
+                    fetchActive();
+                    break;
+                case MSG_POSTED:
+                    synchronized (mNotifications) {
+                        addNotification(sbn);
+                        Collections.sort(mNotifications, Collections.reverseOrder(mNotificationComparator));
+                    }
+                    break;
+                case MSG_REMOVED:
+                    synchronized (mNotifications) {
+                        removeNotification(sbn);
+                        //Collections.sort(mNotifications, Collections.reverseOrder(mNotificationComparator));
+                    }
+                    break;
+                case MSG_ORDER:
+                    synchronized (mNotifications) {
+                        Collections.sort(mNotifications, Collections.reverseOrder(mNotificationComparator));
+                    }
+                    break;
+                case MSG_DISMISS:
+                    /*
+                    if (msg.obj instanceof WatchNotification) {
+                        final WatchNotification n = (WatchNotification) msg.obj;
+                        mRankingMap.getRanking(n.key, mTmpRanking);
+                        n.
+                        StatusBarNotification sbn = sNotifications.get(mTmpRanking.getRank());
+                        if ((sbn.getNotification().flags & Notification.FLAG_AUTO_CANCEL) != 0 &&
+                                sbn.getNotification().contentIntent != null) {
+                            try {
+                                sbn.getNotification().contentIntent.send();
+                            } catch (PendingIntent.CanceledException e) {
+                                Log.d(TAG, "failed to send intent for " + n.key, e);
+                            }
+                        }
+                        cancelNotification(n.key);
+                    }*/
+                    break;
+            }
+        }
+    };
 
     // the HTTPD service for watch to read/dismiss notifications
     private class NotificationHTTPD extends NanoHTTPD {
