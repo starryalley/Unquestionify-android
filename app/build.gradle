@@ -7,7 +7,7 @@ android {
     defaultConfig {
         applicationId "idv.markkuo.unquestionify"
         minSdkVersion 26
-        targetSdkVersion 26
+        targetSdkVersion 28
     }
 
     buildTypes {
