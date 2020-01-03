@@ -451,15 +451,15 @@ public class UnquestionifyService extends NotificationListenerService {
 
     @Override
     public void onDestroy() {
+        super.onDestroy();
         saveStatistics(getApplicationContext());
         server.stop();
         try {
             mConnectIQ.shutdown(this);
-        } catch (InvalidStateException e) {
+        } catch (Exception e) {
             Log.w(TAG, "Cannot shutdown CIQ:" + e);
         }
         server.stop();
-        super.onDestroy();
         unregisterReceiver(serviceReceiver);
     }
 

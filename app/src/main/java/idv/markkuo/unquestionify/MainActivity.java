@@ -29,9 +29,7 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.garmin.android.connectiq.ConnectIQ;
-import com.garmin.android.connectiq.ConnectIQ.ConnectIQListener;
 import com.garmin.android.connectiq.ConnectIQ.IQDeviceEventListener;
-import com.garmin.android.connectiq.ConnectIQ.IQSdkErrorStatus;
 import com.garmin.android.connectiq.IQDevice;
 import com.garmin.android.connectiq.IQDevice.IQDeviceStatus;
 import com.garmin.android.connectiq.exception.InvalidStateException;
@@ -48,11 +46,8 @@ import idv.markkuo.unquestionify.adapter.StatisticsAdapter;
 
 public class MainActivity extends AppCompatActivity {
     private ConnectIQ mConnectIQ;
-    private ListView deviceListView;
-    private ListView statisticsListView;
     private IQDeviceAdapter deviceAdapter;
     private StatisticsAdapter statisticsAdapter;
-    private boolean mSdkReady = false;
     private static final String TAG = MainActivity.class.getSimpleName();
 
     private boolean deviceStatusReceived = false;
@@ -71,37 +66,16 @@ public class MainActivity extends AppCompatActivity {
 
     };
 
-    private ConnectIQListener mListener = new ConnectIQListener() {
-
-        @Override
-        public void onInitializeError(IQSdkErrorStatus errStatus) {
-            mSdkReady = false;
-        }
-
-        @Override
-        public void onSdkReady() {
-            Log.d(TAG, "SDK ready");
-            mSdkReady = true;
-            loadDevices();
-        }
-
-        @Override
-        public void onSdkShutDown() {
-            mSdkReady = false;
-        }
-
-    };
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        deviceListView = findViewById(R.id.deviceList);
+        ListView deviceListView = findViewById(R.id.deviceList);
         deviceAdapter = new IQDeviceAdapter(this);
         deviceListView.setAdapter(deviceAdapter);
 
-        statisticsListView = findViewById(R.id.statisticsList);
+        ListView statisticsListView = findViewById(R.id.statisticsList);
         statisticsAdapter = new StatisticsAdapter(this);
         statisticsListView.setAdapter(statisticsAdapter);
 
@@ -122,7 +96,6 @@ public class MainActivity extends AppCompatActivity {
 
         // Initialize the SDK
         mConnectIQ = ConnectIQ.getInstance();
-        mConnectIQ.initialize(this, true, mListener);
 
         // wait 3 sec for device status and statistics to be updated
         new Handler().postDelayed(new Runnable() {
@@ -198,7 +171,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onPause() {
         super.onPause();
-        if (mSdkReady) {
+        if (mConnectIQ != null) {
             try {
                 List<IQDevice> devices = mConnectIQ.getKnownDevices();
                 if (devices != null) {
@@ -224,11 +197,9 @@ public class MainActivity extends AppCompatActivity {
 
         if (mConnectIQ == null) {
             mConnectIQ = ConnectIQ.getInstance();
-            mConnectIQ.initialize(this, true, mListener);
         }
 
-        if (mSdkReady)
-            loadDevices();
+        loadDevices();
 
         Intent intent = new Intent();
         intent.setAction("idv.markkuo.unquestionify.NOTIFICATION_LISTENER_SERVICE");
@@ -242,10 +213,10 @@ public class MainActivity extends AppCompatActivity {
         try {
             if (mConnectIQ != null) {
                 mConnectIQ.unregisterAllForEvents();
-                mConnectIQ.shutdown(this);
             }
-        } catch (InvalidStateException e) {
+        } catch (Exception e) {
             // ignoring
+            Log.w(TAG, "Connect IQ exception during onDestroy():" + e);
         }
         unregisterReceiver(receiver);
     }
@@ -272,6 +243,10 @@ public class MainActivity extends AppCompatActivity {
 
     public void loadDevices() {
         // Retrieve the list of known devices
+        if (mConnectIQ == null) {
+            Log.w(TAG, "Cannot get connect IQ instance");
+            return;
+        }
         Log.d(TAG, "LoadDevices...");
         try {
             List<IQDevice> devices = mConnectIQ.getKnownDevices();
