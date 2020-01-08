@@ -479,9 +479,10 @@ public class UnquestionifyService extends NotificationListenerService {
     }
 
     private void addNotification(StatusBarNotification sbn) {
-        // ignore group summary and local-only messages
-        if ((sbn.getNotification().flags & Notification.FLAG_GROUP_SUMMARY) != 0 ||
-                (sbn.getNotification().flags & Notification.FLAG_LOCAL_ONLY) != 0) {
+        // ignore group summary messages
+        if ((sbn.getNotification().flags & Notification.FLAG_GROUP_SUMMARY) != 0/* ||
+                (sbn.getNotification().flags & Notification.FLAG_LOCAL_ONLY) != 0*/) {
+            Log.v(TAG, "[ignore group summary] [" + sbn.getPackageName() + "]:" + sbn.getNotification().tickerText + " (flag:" + sbn.getNotification().flags + ")");
             return;
         }
         // ignore old notification
@@ -493,7 +494,7 @@ public class UnquestionifyService extends NotificationListenerService {
         boolean nonASCIIOnly = getNonASCIIOnly();
         String notificationText = getNotificationText(sbn);
         if (nonASCIIOnly && isPureAscii(notificationText)) {
-            Log.d(TAG, "[ignore] [" + sbn.getPackageName() + "]:" + sbn.getNotification().tickerText + " (flag:" + sbn.getNotification().flags + ")");
+            Log.v(TAG, "[ignore ascii only] [" + sbn.getPackageName() + "]:" + sbn.getNotification().tickerText + " (flag:" + sbn.getNotification().flags + ")");
             return;
         }
 
