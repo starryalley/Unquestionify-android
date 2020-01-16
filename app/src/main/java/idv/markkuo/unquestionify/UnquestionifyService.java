@@ -351,6 +351,24 @@ public class UnquestionifyService extends NotificationListenerService {
         // initialise CIQ
         mConnectIQ = ConnectIQ.getInstance(this, ConnectIQ.IQConnectType.WIRELESS);
         // Initialize the SDK
+        // This will cause the app to crash in ConnectIQ library because the context passed to CIQ is a Service,
+        // and CIQ seems to want to display a dialog to ask user to install Garmin Connect app. This will cause:
+        // E/AndroidRuntime: FATAL EXCEPTION: main
+        //    Process: idv.markkuo.unquestionify, PID: 8508
+        //    android.view.WindowManager$BadTokenException: Unable to add window -- token null is not for an application
+        //        at android.view.ViewRootImpl.setView(ViewRootImpl.java:682)
+        //        at android.view.WindowManagerGlobal.addView(WindowManagerGlobal.java:342)
+        //        at android.view.WindowManagerImpl.addView(WindowManagerImpl.java:93)
+        //        at android.app.Dialog.show(Dialog.java:316)
+        //        at com.garmin.android.connectiq.ConnectIQ$1.run(ConnectIQ.java:557)
+        //        at android.os.Handler.handleCallback(Handler.java:751)
+        //        at android.os.Handler.dispatchMessage(Handler.java:95)
+        //        at android.os.Looper.loop(Looper.java:154)
+        //        at android.app.ActivityThread.main(ActivityThread.java:6077)
+        //        at java.lang.reflect.Method.invoke(Native Method)
+        //        at com.android.internal.os.ZygoteInit$MethodAndArgsCaller.run(ZygoteInit.java:866)
+        //        at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:756)
+        // Let's ignore it for now and assume user already has Garmin Connect app installed.
         mConnectIQ.initialize(this, true, mCIQListener);
 
         mCIQApp = new IQApp(CIQ_APP);
