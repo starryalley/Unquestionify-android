@@ -8,6 +8,8 @@ import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.TextView;
 
+import androidx.annotation.NonNull;
+
 import java.util.List;
 
 import idv.markkuo.unquestionify.R;
@@ -19,15 +21,17 @@ public class StatisticsAdapter extends ArrayAdapter<Pair<String, String>> {
     }
 
     @Override
-    public View getView(int position, View convertView, ViewGroup parent) {
+    public @NonNull View getView(int position, View convertView, @NonNull ViewGroup parent) {
         if (convertView == null) {
             LayoutInflater inflater = LayoutInflater.from(getContext());
             convertView = inflater.inflate(R.layout.statistic_row, parent, false);
         }
 
         Pair<String, String> pair = getItem(position);
-        ((TextView)convertView.findViewById(R.id.text1)).setText(pair.first);
-        ((TextView)convertView.findViewById(R.id.text2)).setText(pair.second);
+        if (pair != null) {
+            ((TextView) convertView.findViewById(R.id.text1)).setText(pair.first);
+            ((TextView) convertView.findViewById(R.id.text2)).setText(pair.second);
+        }
 
         return convertView;
     }

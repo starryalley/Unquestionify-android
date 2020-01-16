@@ -29,7 +29,6 @@ public class AppNotificationListActivity extends AppCompatActivity {
 
     private NotificationSwitchAdapter adapter;
     private List<NotificationApp> list;
-    private ListView listView;
     private Set<String> allowedApps;
     private PackageManager packageManager;
     private TextView loadingText;
@@ -42,7 +41,7 @@ public class AppNotificationListActivity extends AppCompatActivity {
 
         list = new ArrayList<>();
         adapter = new NotificationSwitchAdapter(this);
-        listView = findViewById(R.id.list);
+        ListView listView = findViewById(R.id.list);
         listView.setAdapter(adapter);
 
         loadingText = findViewById(R.id.loading_text);

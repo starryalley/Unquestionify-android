@@ -17,6 +17,8 @@ import android.text.TextUtils;
 import android.util.Log;
 import android.util.Pair;
 
+import androidx.annotation.NonNull;
+
 import java.text.DateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -41,7 +43,7 @@ public class WatchNotification {
 
     String id;      //random generated uuid for indexing
     String key;     //Notification.getKey()
-    String title;   //android.title
+    private String title;   //android.title
     long when;      //Notification.when
 
     static void setDimension(int watchWidth, int watchHeight) {
@@ -67,7 +69,7 @@ public class WatchNotification {
         return Integer.parseInt(preferences.getString("textsize", "22"));
     }
 
-    public String toString() {
+    public @NonNull String toString() {
         StringBuilder sb = new StringBuilder();
         sb.append("[").append(appName).append("]\n").append(title);
         for (int i = (msg.size() - 3) < 0 ? 0 : msg.size() - 3; i < msg.size(); i++)
@@ -75,7 +77,7 @@ public class WatchNotification {
         return sb.toString();
     }
 
-    String toSummaryString() {
+    private String toSummaryString() {
         StringBuilder sb = new StringBuilder();
         sb.append("[").append(appName).append("] ").append(title);
         for (int i = (msg.size() - 3) < 0 ? 0 : msg.size() - 3; i < msg.size(); i++)
@@ -221,7 +223,7 @@ public class WatchNotification {
         canvas.drawColor(Color.BLACK);
 
         // do static text layout
-        int layoutHeight = height;
+
         StaticLayout textLayout = StaticLayout.Builder.obtain(text, 0, text.length(), textPaint, width)
                 .setAlignment(center ? Layout.Alignment.ALIGN_CENTER : Layout.Alignment.ALIGN_NORMAL)
                 .setMaxLines(maxLines) // we need to calculate this properly for ellipsizing (ellipsis) to work
@@ -231,7 +233,7 @@ public class WatchNotification {
         Log.v(TAG, "[_doTextLayout] max lines:" + maxLines);
 
         // get height of multiline text layout
-        layoutHeight = textLayout.getHeight();
+        int layoutHeight = textLayout.getHeight();
 
         canvas.save();
         textLayout.draw(canvas);
@@ -240,12 +242,10 @@ public class WatchNotification {
         int startLineTop = textLayout.getLineTop(0);
         int endLine = textLayout.getLineForVertical(startLineTop + height);
         int endLineBottom = textLayout.getLineBottom(endLine);
-        int maxLinesOnpage = endLine;
 
         int ellipsisStart = textLayout.getEllipsisStart(endLine);
 
-        Log.v(TAG, "[_doTextLayout] endLine:" + endLine + ",endLineBottom:" + endLineBottom +
-                ",maxLinesOnPage:" + maxLinesOnpage + ",endline ellipsis start:" + ellipsisStart);
+        Log.v(TAG, "[_doTextLayout] endLine:" + endLine + ",endLineBottom:" + endLineBottom + ",end line ellipsis start:" + ellipsisStart);
 
         // there is next page (ellipsis is present)
         int offset = 0;
@@ -265,7 +265,6 @@ public class WatchNotification {
             bitmap = Bitmap.createBitmap(bitmap, 0, 0, width, layoutHeight);
         }
 
-        Pair<Bitmap, Integer> bitmapIntegerPair = new Pair<>(bitmap, offset);
-        return bitmapIntegerPair;
+        return new Pair<>(bitmap, offset);
     }
 }

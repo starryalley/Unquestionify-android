@@ -5,6 +5,8 @@ import android.text.InputType;
 import android.util.Log;
 import android.widget.EditText;
 
+import androidx.annotation.NonNull;
+import androidx.fragment.app.FragmentActivity;
 import androidx.preference.EditTextPreference;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
@@ -33,7 +35,7 @@ public class NotificationSettingsFragment extends PreferenceFragmentCompat {
             textSizePreference.setOnBindEditTextListener(
                     new EditTextPreference.OnBindEditTextListener() {
                         @Override
-                        public void onBindEditText(EditText editText) {
+                        public void onBindEditText(@NonNull EditText editText) {
                             editText.setInputType(InputType.TYPE_CLASS_NUMBER);
                         }
                     });
@@ -53,8 +55,12 @@ public class NotificationSettingsFragment extends PreferenceFragmentCompat {
                 @Override
                 public boolean onPreferenceClick(Preference preference) {
                     Log.d(TAG, "Reset statistics");
-                    UnquestionifyService.resetStatistics(getActivity().getApplicationContext());
-                    return true;
+                    FragmentActivity activity = getActivity();
+                    if (activity != null) {
+                        UnquestionifyService.resetStatistics(activity.getApplicationContext());
+                        return true;
+                    }
+                    return false;
                 }
             });
         }

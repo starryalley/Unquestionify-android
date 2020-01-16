@@ -10,6 +10,8 @@ import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.TextView;
 
+import androidx.annotation.NonNull;
+
 import com.garmin.android.connectiq.IQDevice;
 import com.garmin.android.connectiq.IQDevice.IQDeviceStatus;
 
@@ -24,15 +26,17 @@ public class IQDeviceAdapter extends ArrayAdapter<IQDevice> {
     }
 
     @Override
-    public View getView(int position, View convertView, ViewGroup parent) {
+    public @NonNull View getView(int position, View convertView, @NonNull ViewGroup parent) {
         if (convertView == null) {
             convertView = mInflater.inflate(android.R.layout.simple_list_item_2, parent, false);
         }
 
         IQDevice device = getItem(position);
-        String friendly = device.getFriendlyName();
-        ((TextView)convertView.findViewById(android.R.id.text1)).setText((friendly == null) ? device.getDeviceIdentifier() + "" : device.getFriendlyName());
-        ((TextView)convertView.findViewById(android.R.id.text2)).setText(device.getStatus().name());
+        if (device != null) {
+            String friendly = device.getFriendlyName();
+            ((TextView) convertView.findViewById(android.R.id.text1)).setText((friendly == null) ? device.getDeviceIdentifier() + "" : device.getFriendlyName());
+            ((TextView) convertView.findViewById(android.R.id.text2)).setText(device.getStatus().name());
+        }
 
         return convertView;
     }
@@ -48,7 +52,7 @@ public class IQDeviceAdapter extends ArrayAdapter<IQDevice> {
         Log.i(TAG, "device:" + device + " status changed:" + status.name());
         for(int i = 0; i < numItems; i++) {
             IQDevice local = getItem(i);
-            if (local.getDeviceIdentifier() == device.getDeviceIdentifier()) {
+            if (local != null && local.getDeviceIdentifier() == device.getDeviceIdentifier()) {
                 local.setStatus(status);
                 notifyDataSetChanged();
                 return;

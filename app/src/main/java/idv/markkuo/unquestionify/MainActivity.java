@@ -1,13 +1,10 @@
 package idv.markkuo.unquestionify;
 
-import android.app.Dialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.graphics.Bitmap;
-import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.os.Handler;
 import android.provider.Settings;
@@ -17,11 +14,7 @@ import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
 
-import android.view.ViewGroup;
-import android.view.Window;
-import android.widget.ImageView;
 import android.widget.ListView;
-import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -115,6 +108,7 @@ public class MainActivity extends AppCompatActivity {
         }, 3 * 1000);
     }
 
+    /*
     private void showImage(Bitmap bitmap) {
         Dialog builder = new Dialog(this);
         builder.requestWindowFeature(Window.FEATURE_NO_TITLE);
@@ -134,6 +128,7 @@ public class MainActivity extends AppCompatActivity {
                 ViewGroup.LayoutParams.MATCH_PARENT));
         builder.show();
     }
+    */
 
     private void openPermissionDialog() {
         AlertDialog alertDialog = new AlertDialog.Builder(this).create();
@@ -269,20 +264,22 @@ public class MainActivity extends AppCompatActivity {
         public void onReceive(Context context, Intent intent) {
             statisticsReceived = true;
             String statusString = intent.getStringExtra("service_status");
-            try {
-                JSONObject o = new JSONObject(statusString);
-                Log.v(TAG, "service status:" + o);
-                List<Pair<String, String>> statistics = new ArrayList<>();
-                Iterator<String> keys = o.keys();
+            if (statusString != null) {
+                try {
+                    JSONObject o = new JSONObject(statusString);
+                    Log.v(TAG, "service status:" + o);
+                    List<Pair<String, String>> statistics = new ArrayList<>();
+                    Iterator<String> keys = o.keys();
 
-                while(keys.hasNext()) {
-                    String key = keys.next();
-                    String value = o.get(key).toString();
-                    statistics.add(new Pair<>(key, value));
+                    while (keys.hasNext()) {
+                        String key = keys.next();
+                        String value = o.get(key).toString();
+                        statistics.add(new Pair<>(key, value));
+                    }
+                    statisticsAdapter.setStatistics(statistics);
+                } catch (Exception e) {
+                    Log.e(TAG, "error parsing json service_status:" + e);
                 }
-                statisticsAdapter.setStatistics(statistics);
-            } catch (Exception e) {
-                Log.e(TAG, "error parsing json service_status:" + e);
             }
         }
     }

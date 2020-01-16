@@ -10,6 +10,8 @@ import android.widget.ImageView;
 import android.widget.Switch;
 import android.widget.TextView;
 
+import androidx.annotation.NonNull;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -42,8 +44,7 @@ public class NotificationSwitchAdapter extends ArrayAdapter<NotificationApp> {
     }
 
     @Override
-    public View getView(int position, View convertView, ViewGroup parent) {
-        final NotificationApp app = getItem(position);
+    public @NonNull View getView(int position, View convertView, @NonNull ViewGroup parent) {
         ViewHolder viewHolder;
 
         if (convertView == null) {
@@ -58,28 +59,28 @@ public class NotificationSwitchAdapter extends ArrayAdapter<NotificationApp> {
             viewHolder = (ViewHolder) convertView.getTag();
         }
 
-        viewHolder.appSwitch.setTag(position);
-        viewHolder.appSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener()
-        {
-            @Override
-            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked)
-            {
-                Log.d(TAG, "app " + app.getAppName() + " changed:" + isChecked);
-                if (isChecked)
-                    checkedRows.add((Integer)buttonView.getTag());
-                else
-                    checkedRows.remove(buttonView.getTag());
-                app.setEnabled(isChecked);
-                Log.v(TAG, "checked rows:" + checkedRows.toString());
-                // apply the change
-                activity.updateEnabledApp(app.getPackageName(), isChecked);
-            }
-        });
+        final NotificationApp app = getItem(position);
+        if (app != null) {
+            viewHolder.appSwitch.setTag(position);
+            viewHolder.appSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+                @Override
+                public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                    Log.d(TAG, "app " + app.getAppName() + " changed:" + isChecked);
+                    if (isChecked)
+                        checkedRows.add((Integer) buttonView.getTag());
+                    else
+                        checkedRows.remove(buttonView.getTag());
+                    app.setEnabled(isChecked);
+                    Log.v(TAG, "checked rows:" + checkedRows.toString());
+                    // apply the change
+                    activity.updateEnabledApp(app.getPackageName(), isChecked);
+                }
+            });
 
-        viewHolder.appIcon.setImageDrawable(app.getAppIcon());
-        viewHolder.appName.setText(app.getAppName());
-        viewHolder.appSwitch.setChecked(app.getEnabled());
-
+            viewHolder.appIcon.setImageDrawable(app.getAppIcon());
+            viewHolder.appName.setText(app.getAppName());
+            viewHolder.appSwitch.setChecked(app.getEnabled());
+        }
         return convertView;
     }
 }

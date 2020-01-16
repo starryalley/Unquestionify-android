@@ -175,91 +175,6 @@ public class UnquestionifyService extends NotificationListenerService {
         // or "ISO-8859-1" for ISO Latin 1
     }
 
-    private String textToBase64(String text) {
-
-        float scale = getResources().getDisplayMetrics().density;
-
-        // new anti-aliased Paint
-        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        paint.setColor(Color.WHITE);
-
-        // text size in pixels
-        paint.setTextSize((int) (8 * scale));
-
-        // text shadow
-        //paint.setShadowLayer(1f, 0f, 1f, Color.DKGRAY);
-
-        // draw text to the Canvas
-        Rect bounds = new Rect();
-        paint.getTextBounds(text, 0, text.length(), bounds);
-        Bitmap bitmap = Bitmap.createBitmap(bounds.width(), bounds.height(), Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(bitmap);
-        canvas.drawColor(Color.BLACK);
-
-        //canvas.draw(icon);
-        canvas.drawText(text, 0, bounds.height() - 1, paint);
-
-
-        // create byte array
-        // [15:0]   size (bytes) of payload
-        // [31:16]  width
-        // [47:32]  height
-        //  ...     payload
-        try {
-            short size = (short) Math.ceil((double) bounds.width() * bounds.height() / 8);
-            ByteBuffer bytes = ByteBuffer.allocate(size);
-            Log.d(TAG, "creating " + (size) + " bytes of data");
-            int k = 0;
-            int pixel, intensity;
-            byte b = 0;
-            int bytecount = 0;
-            for (int y = 0; y < bounds.height(); y++) {
-                for (int x = 0; x < bounds.width(); x++, k++) {
-                    // get one pixel color
-                    pixel = bitmap.getPixel(x, y);
-                    // pixel intensity.
-                    intensity = (int) (0.299 * Color.red(pixel) + 0.587 * Color.green(pixel) + 0.114 * Color.blue(pixel));
-                    if (k > 0 && k % 8 == 0) {
-                        // save this byte
-                        bytes.put(b);
-                        b = 0;
-                        bytecount++;
-                    }
-                    // binary
-                    if (intensity < 128) {
-                        b &= ~(1 << (k % 8));
-                    } else {
-                        b |= 1 << (k % 8);
-                    }
-                }
-            }
-            if (k % 8 != 0) {
-                bytes.put(b);
-                bytecount++;
-            }
-
-            JSONObject res = new JSONObject();
-            try {
-                res.put("width", bounds.width());
-                res.put("height", bounds.height());
-                res.put("data", Base64.encodeToString(bytes.array(), Base64.NO_WRAP));
-            } catch (JSONException e) {
-                Log.e(TAG, "unable to create json object");
-            }
-            Log.d(TAG, "width:" + bounds.width() + " height:" + bounds.height() + " =>raw " + bytes.array().length + " bytes, BASE64 encoded:" + res.getString("data").length() + " bytes");
-            return res.toString();
-        } catch (Exception e) {
-            Log.e(TAG, "Error creating byte array" + e);
-            return "{}";
-        }
-    }
-
-    private ByteArrayInputStream bitmapToInputStreamUncompressed(Bitmap bitmap) {
-        ByteArrayOutputStream stream = new ByteArrayOutputStream();
-        bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream);
-        return new ByteArrayInputStream(stream.toByteArray());
-    }
-
     private ByteArrayInputStream bitmapToInputStream(Bitmap bitmap) {
         return bitmapToInputStream(bitmap, true, 1);
     }
@@ -551,6 +466,7 @@ public class UnquestionifyService extends NotificationListenerService {
                 lastNotificationWhen.remove(n.key);
                 Log.d(TAG, "[remove]" + n.toLogString());
                 lastUpdatedTS = System.currentTimeMillis();
+                break;
             }
         }
     }
@@ -688,22 +604,28 @@ public class UnquestionifyService extends NotificationListenerService {
         @Override
         public void onReceive(Context context, Intent intent) {
             String command = intent.getStringExtra("command");
-            if(command.equals("addApp")) {
+            if (command == null)
+                return;
+            String packageName;
+            switch (command) {
+            case "addApp":
                 //UnquestionifyService.this.cancelAllNotifications();
-                String packageName = intent.getStringExtra("app");
-                if (!packageName.equals("")) {
+                packageName = intent.getStringExtra("app");
+                if (packageName != null && !packageName.equals("")) {
                     mAllowedSources.add(packageName);
                     Log.d(TAG, "adding " + packageName + " to allowed sources");
                     saveAllowedSources();
                 }
-            } else if (command.equals("removeApp")) {
-                String packageName = intent.getStringExtra("app");
-                if (!packageName.equals("")) {
+                break;
+            case "removeApp":
+                packageName = intent.getStringExtra("app");
+                if (packageName != null && !packageName.equals("")) {
                     mAllowedSources.remove(packageName);
                     Log.d(TAG, "removing " + packageName + " from allowed sources");
                     saveAllowedSources();
                 }
-            } else if (command.equals("startStatusReport")) {
+                break;
+            case "startStatusReport":
                 if (statusReportHandler == null) {
                     Log.d(TAG, "starting status report");
                     broadcastServiceStatus();
@@ -719,12 +641,14 @@ public class UnquestionifyService extends NotificationListenerService {
                         }
                     }, delay);
                 }
-            } else if (command.equals("stopStatusReport")) {
+                break;
+            case "stopStatusReport":
                 if (statusReportHandler != null) {
                     Log.d(TAG, "stopping status report");
                     statusReportHandler.removeCallbacksAndMessages(null);
                     statusReportHandler = null;
                 }
+                break;
             }
         }
     }
@@ -808,13 +732,13 @@ public class UnquestionifyService extends NotificationListenerService {
                     break;
             }
         }
-    };
+    }
 
     // the HTTPD service for watch to read/dismiss notifications
     private class NotificationHTTPD extends NanoHTTPD {
         private String TAG = this.getClass().getSimpleName();
 
-        public NotificationHTTPD() throws IOException {
+        NotificationHTTPD() {
             super(8080);
         }
 
@@ -833,14 +757,15 @@ public class UnquestionifyService extends NotificationListenerService {
             Method method = session.getMethod();
             String uri = session.getUri();
 
-            if (!session.getHeaders().get("remote-addr").equals("127.0.0.1")) {
-                Log.e(TAG, "forbidding connection other than localhost. Incoming address:" + session.getHeaders().get("remote-addr"));
+            String remoteAddress = session.getHeaders().get("remote-addr");
+            if (remoteAddress != null && !remoteAddress.equals("127.0.0.1")) {
+                Log.e(TAG, "forbidding connection other than localhost. Incoming address:" + remoteAddress);
                 forbiddenCount++;
                 return new NanoHTTPD.Response(Response.Status.FORBIDDEN, MIME_PLAINTEXT, "SERVICE FORBIDDEN");
             }
 
             Map<String, String> params = session.getParms();
-            Map<String, String> headers = session.getHeaders();
+            //Map<String, String> headers = session.getHeaders();
             //Log.v(TAG, "=== [" + method.name() + "] URI:" + uri + ", Headers:" + headers + ", Params:" + params);
 
             // ========== request session ============
