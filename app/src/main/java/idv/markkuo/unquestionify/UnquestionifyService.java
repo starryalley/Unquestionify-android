@@ -320,6 +320,11 @@ public class UnquestionifyService extends NotificationListenerService {
         return preferences.getBoolean("group_msg", false);
     }
 
+    private boolean getShowPrompt() {
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+        return preferences.getBoolean("show_prompt", true);
+    }
+
     private void saveAllowedSources() {
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
         SharedPreferences.Editor editor = preferences.edit();
@@ -540,6 +545,8 @@ public class UnquestionifyService extends NotificationListenerService {
     }
 
     private void startWatchApp() {
+        if (!getShowPrompt())
+            return;
         if (mOpenAppRequestInProgress)
             return;
         if (!mCIQReady) {
@@ -914,6 +921,8 @@ public class UnquestionifyService extends NotificationListenerService {
                 if (params.get("page") != null)
                     page = Integer.parseInt(params.get("page"));
                 Log.d(TAG, "/notifications requested with page:" + page);
+                if (page > -1)
+                    notificationDetailQueryCount++;
                 bitmapQueryCount++;
                 String id = uri.substring("/notifications/".length());
                 if (mNotifications.size() == 0) {

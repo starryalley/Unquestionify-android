@@ -18,6 +18,11 @@
             app:key="textsize"
             app:title="Text Height on watch (pixels)"
             app:useSimpleSummaryProvider="true" />
+
+        <SwitchPreferenceCompat
+            app:key="show_prompt"
+            app:title="Show prompt on watch"
+            app:defaultValue="true" />
     </PreferenceCategory>
 
     <PreferenceCategory
