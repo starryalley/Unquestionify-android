@@ -17,6 +17,7 @@ import android.widget.ListView;
 import android.widget.TextView;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
@@ -28,7 +29,7 @@ public class AppNotificationListActivity extends AppCompatActivity {
     private static final String TAG = AppNotificationListActivity.class.getSimpleName();
 
     private NotificationSwitchAdapter adapter;
-    private List<NotificationApp> list;
+    private final List<NotificationApp> list = new ArrayList<>();
     private Set<String> allowedApps;
     private PackageManager packageManager;
     private TextView loadingText;
@@ -39,7 +40,6 @@ public class AppNotificationListActivity extends AppCompatActivity {
         setContentView(R.layout.activity_notificationlist);
         packageManager = getApplicationContext().getPackageManager();
 
-        list = new ArrayList<>();
         adapter = new NotificationSwitchAdapter(this);
         ListView listView = findViewById(R.id.list);
         listView.setAdapter(adapter);
@@ -79,7 +79,7 @@ public class AppNotificationListActivity extends AppCompatActivity {
     private void listApps() {
         //get a list of installed apps.
         List<ApplicationInfo> packages = packageManager.getInstalledApplications(PackageManager.GET_META_DATA);
-        packages.sort(new Comparator<ApplicationInfo>() {
+        Collections.sort(packages, new Comparator<ApplicationInfo>() {
             @Override
             public int compare(ApplicationInfo a, ApplicationInfo b) {
                 return getAppName(a).compareToIgnoreCase(getAppName(b));

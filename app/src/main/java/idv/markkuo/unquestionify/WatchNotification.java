@@ -6,9 +6,8 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Rect;
-import android.graphics.drawable.BitmapDrawable;
-import android.graphics.drawable.Drawable;
 import android.graphics.drawable.Icon;
+import android.os.Build;
 import android.preference.PreferenceManager;
 import android.text.Layout;
 import android.text.StaticLayout;
@@ -61,7 +60,12 @@ public class WatchNotification {
         this.appName = appName;
         this.icon = icon;
         appendMessage(text, when);
-        locale = context.getResources().getConfiguration().getLocales().get(0);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            locale = context.getResources().getConfiguration().getLocales().get(0);
+        } else {
+            locale = context.getResources().getConfiguration().locale;
+        }
+
     }
 
     private int getTextSize() {
@@ -72,7 +76,7 @@ public class WatchNotification {
     public @NonNull String toString() {
         StringBuilder sb = new StringBuilder();
         sb.append("[").append(appName).append("]\n").append(title);
-        for (int i = (msg.size() - 3) < 0 ? 0 : msg.size() - 3; i < msg.size(); i++)
+        for (int i = Math.max((msg.size() - 3), 0); i < msg.size(); i++)
             sb.append("\n").append(msg.get(i));
         return sb.toString();
     }
@@ -80,7 +84,7 @@ public class WatchNotification {
     private String toSummaryString() {
         StringBuilder sb = new StringBuilder();
         sb.append("[").append(appName).append("] ").append(title);
-        for (int i = (msg.size() - 3) < 0 ? 0 : msg.size() - 3; i < msg.size(); i++)
+        for (int i = Math.max((msg.size() - 3), 0); i < msg.size(); i++)
             sb.append("\n").append(msg.get(i).replaceAll("\n", "\t"));
         return sb.toString();
     }
@@ -103,6 +107,7 @@ public class WatchNotification {
         this.when = when;
     }
 
+    /*
     private static Bitmap drawableToBitmap(Drawable drawable) {
         Bitmap bitmap;
 
@@ -130,6 +135,7 @@ public class WatchNotification {
             return drawableToBitmap(icon.loadDrawable(context));
         return null;
     }
+    */
 
     Bitmap getOverviewBitmap() {
         if (overviewBitmap == null)
