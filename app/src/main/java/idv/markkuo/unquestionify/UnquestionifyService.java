@@ -462,7 +462,7 @@ public class UnquestionifyService extends NotificationListenerService {
         // doesn't exists, let's add to the beginning of the list
         mNotifications.add(0, new WatchNotification(getApplicationContext(), sbn.getKey(), getNotificationTitle(sbn),
                 notificationText, getAppName(sbn.getPackageName()),
-                sbn.getNotification().getSmallIcon(), sbn.getNotification().when));
+                null, sbn.getNotification().when));
         Log.d(TAG, "[add]" + mNotifications.get(0).toLogString());
         /*
         // sort mNotifications by when descendingly

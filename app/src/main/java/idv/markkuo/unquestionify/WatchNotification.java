@@ -58,7 +58,7 @@ public class WatchNotification {
         this.title = title;
         this.msg = new Vector<>(4);
         this.appName = appName;
-        this.icon = icon;
+        this.icon = icon; // not used for now
         appendMessage(text, when);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             locale = context.getResources().getConfiguration().getLocales().get(0);
@@ -230,11 +230,20 @@ public class WatchNotification {
 
         // do static text layout
 
-        StaticLayout textLayout = StaticLayout.Builder.obtain(text, 0, text.length(), textPaint, width)
-                .setAlignment(center ? Layout.Alignment.ALIGN_CENTER : Layout.Alignment.ALIGN_NORMAL)
-                .setMaxLines(maxLines) // we need to calculate this properly for ellipsizing (ellipsis) to work
-                .setEllipsize(TextUtils.TruncateAt.END)
-                .build();
+        StaticLayout textLayout = null;
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            textLayout = StaticLayout.Builder.obtain(text, 0, text.length(), textPaint, width)
+                    .setAlignment(center ? Layout.Alignment.ALIGN_CENTER : Layout.Alignment.ALIGN_NORMAL)
+                    .setMaxLines(maxLines) // we need to calculate this properly for ellipsizing (ellipsis) to work
+                    .setEllipsize(TextUtils.TruncateAt.END)
+                    .build();
+        } else {
+            // TODO: not verified, and not having max lines with earlier API versions
+            // see https://gist.github.com/lucasr/a1ad172c20018ca22b60
+            textLayout = new StaticLayout(text, 0, text.length(), textPaint, width,
+                    center ? Layout.Alignment.ALIGN_CENTER : Layout.Alignment.ALIGN_NORMAL,
+                    1.0f, 0.0f, true, TextUtils.TruncateAt.END, width);
+        }
 
         Log.v(TAG, "[_doTextLayout] max lines:" + maxLines);
 
