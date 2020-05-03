@@ -1,5 +1,6 @@
 package idv.markkuo.unquestionify;
 
+import android.annotation.SuppressLint;
 import android.app.Notification;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -22,7 +23,6 @@ import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
 import android.text.TextUtils;
 import android.util.Log;
-import android.util.Base64;
 
 import com.garmin.android.connectiq.ConnectIQ;
 import com.garmin.android.connectiq.IQApp;
@@ -35,9 +35,7 @@ import org.json.JSONObject;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -45,6 +43,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -71,7 +70,7 @@ public class UnquestionifyService extends NotificationListenerService {
     private UnquestionifyServiceReceiver serviceReceiver;
     private boolean connected = false;
     private NotificationHTTPD server;
-    private ArrayList<WatchNotification> mNotifications;
+    private final ArrayList<WatchNotification> mNotifications = new ArrayList<>();
     private Set<String> mAllowedSources;
     private long lastUpdatedTS = 0; //last updated time stamp for notification
     private final Map<String, Long> lastNotificationWhen = new HashMap<>();
@@ -171,7 +170,7 @@ public class UnquestionifyService extends NotificationListenerService {
     }
 
     private static boolean isPureAscii(String v) {
-        return Charset.forName("US-ASCII").newEncoder().canEncode(v);
+        return StandardCharsets.US_ASCII.newEncoder().canEncode(v);
         // or "ISO-8859-1" for ISO Latin 1
     }
 
@@ -339,8 +338,6 @@ public class UnquestionifyService extends NotificationListenerService {
         IntentFilter filter = new IntentFilter();
         filter.addAction("idv.markkuo.unquestionify.NOTIFICATION_LISTENER_SERVICE");
         registerReceiver(serviceReceiver, filter);
-
-        mNotifications = new ArrayList<>();
 
         loadAllowedApps();
         loadStatistics(getApplicationContext());
@@ -587,6 +584,7 @@ public class UnquestionifyService extends NotificationListenerService {
         }
     }
 
+    @SuppressLint("DefaultLocale")
     private void broadcastServiceStatus() {
         JSONObject o = new JSONObject();
         try {
@@ -722,6 +720,7 @@ public class UnquestionifyService extends NotificationListenerService {
                     break;
                 case MSG_POSTED:
                     synchronized (mNotifications) {
+                        assert sbn != null;
                         addNotification(sbn);
                         Collections.sort(mNotifications, Collections.reverseOrder(mNotificationComparator));
                     }
@@ -796,26 +795,26 @@ public class UnquestionifyService extends NotificationListenerService {
             // ========== request session ============
             if (method == Method.GET && uri.equals("/request_session")) {
                 // check appid param
-                if (params.get("appid") == null || !params.get("appid").equals(CIQ_APP)) {
+                if (params.get("appid") == null || !Objects.equals(params.get("appid"), CIQ_APP)) {
                     Log.e(TAG, "/request_session requested with incorrect appid");
                     return new NanoHTTPD.Response(Response.Status.FORBIDDEN, "application/json",
                             createErrorJSONResponse("Wrong appid").toString());
                 }
 
                 boolean isRound = true; //assume default watch is round shape
-                int page = -1; // -1 is the overview page (max 3 lines)
+                //int page = -1; // -1 is the overview page (max 3 lines)
                 int watchWidth = 260, watchHeight = 260;
                 if (params.get("width") != null)
-                    watchWidth = Integer.parseInt(params.get("width"));
+                    watchWidth = Integer.parseInt(Objects.requireNonNull(params.get("width")));
                 if (params.get("height") != null)
-                    watchHeight = Integer.parseInt(params.get("height"));
+                    watchHeight = Integer.parseInt(Objects.requireNonNull(params.get("height")));
                 if (params.get("shape") != null)
-                    isRound = params.get("shape").equals("round");
+                    isRound = Objects.equals(params.get("shape"), "round");
                 Log.d(TAG, "Watch Dimension:" + watchWidth + "x" + watchHeight + " pixels (round:" + isRound + ")");
                 // calculate proper width/height for round watches
                 if (isRound) {
                     // round screen, calculate max square inside the circle of diameter width
-                    watchWidth = watchHeight = (int) Math.ceil(Math.sqrt(watchWidth * watchWidth / 2)) + defaultSquareWidthOffset;
+                    watchWidth = watchHeight = (int) Math.ceil(Math.sqrt(watchWidth * watchWidth / 2.0)) + defaultSquareWidthOffset;
                 }
                 Log.d(TAG, "Png will be of " + watchWidth + "x" + watchHeight + " pixels");
                 WatchNotification.setDimension(watchWidth, watchHeight);
@@ -854,7 +853,7 @@ public class UnquestionifyService extends NotificationListenerService {
                 Log.e(TAG, "/request_session should be requested first!");
                 return new NanoHTTPD.Response(Response.Status.FORBIDDEN, "application/json",
                         createErrorJSONResponse("No Permission").toString());
-            } else if (params.get("session") == null || !params.get("session").equals(sessionId)) {
+            } else if (params.get("session") == null || !Objects.equals(params.get("session"), sessionId)) {
                 forbiddenCount++;
                 Log.e(TAG, "session incorrect! Permission denied");
                 return new NanoHTTPD.Response(Response.Status.FORBIDDEN, "application/json",
@@ -871,11 +870,11 @@ public class UnquestionifyService extends NotificationListenerService {
                 }
                 int width = 172, height = 40, textSize = 19;
                 if (params.get("width") != null)
-                    width = Integer.parseInt(params.get("width"));
+                    width = Integer.parseInt(Objects.requireNonNull(params.get("width")));
                 if (params.get("height") != null)
-                    height = Integer.parseInt(params.get("height"));
+                    height = Integer.parseInt(Objects.requireNonNull(params.get("height")));
                 if (params.get("textSize") != null)
-                    textSize = Integer.parseInt(params.get("textSize"));
+                    textSize = Integer.parseInt(Objects.requireNonNull(params.get("textSize")));
 
                 Bitmap bitmap = mNotifications.get(0).getSummaryBitmap(width, height, textSize);
                 if (bitmap == null) {
@@ -919,7 +918,7 @@ public class UnquestionifyService extends NotificationListenerService {
 
                 int page = -1; // -1 is the overview page (max 3 lines)
                 if (params.get("page") != null)
-                    page = Integer.parseInt(params.get("page"));
+                    page = Integer.parseInt(Objects.requireNonNull(params.get("page")));
                 Log.d(TAG, "/notifications requested with page:" + page);
                 if (page > -1)
                     notificationDetailQueryCount++;
@@ -943,7 +942,7 @@ public class UnquestionifyService extends NotificationListenerService {
                 }
 
                 // ok, now we want to create bitmap for notification
-                Bitmap bitmap = null;
+                Bitmap bitmap;
                 if (page == -1)
                     bitmap = notification.getOverviewBitmap();
                 else
