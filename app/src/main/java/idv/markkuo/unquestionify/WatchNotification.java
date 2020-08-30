@@ -230,7 +230,7 @@ public class WatchNotification {
 
         // do static text layout
 
-        StaticLayout textLayout = null;
+        StaticLayout textLayout;
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
             textLayout = StaticLayout.Builder.obtain(text, 0, text.length(), textPaint, width)
                     .setAlignment(center ? Layout.Alignment.ALIGN_CENTER : Layout.Alignment.ALIGN_NORMAL)
