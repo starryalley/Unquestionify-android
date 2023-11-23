@@ -1,3 +1,14 @@
+
+# Updates
+
+24/11/2023: This companion app has been modified to work with this cache/relay service: [unquestionify-relay](https://github.com/starryalley/unquestionify-relay) to bypass the current Garmin Connect Mobile's `makeImageRequest()` API behaviour. See details in that project.
+
+If you are compiling this Android app by yourself, please replace below line from `UnquestionifyService.java` with your deployed unquestionify-relay URL for this app to work. I'm currently not revealing the URL in this source code because I am using the free tier of the cloud service, which has limited capacity.
+
+```
+private final String relayServer = "https://fill_in_the_relay_server_domain_here";
+```
+
 # Unquestionify-Android
 
 Unquestionify is a [Garmin Connect IQ](https://apps.garmin.com/en-US/) watch widget, which displays your phone's notifications (selectable from which apps) as a 1-bit monochrome image.
