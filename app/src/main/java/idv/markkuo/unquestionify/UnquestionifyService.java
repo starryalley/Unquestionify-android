@@ -10,10 +10,6 @@ import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
-import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.Paint;
-import android.graphics.Rect;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -24,6 +20,13 @@ import android.service.notification.StatusBarNotification;
 import android.text.TextUtils;
 import android.util.Log;
 
+import com.android.volley.AuthFailureError;
+import com.android.volley.Request;
+import com.android.volley.RequestQueue;
+import com.android.volley.Response;
+import com.android.volley.VolleyError;
+import com.android.volley.toolbox.StringRequest;
+import com.android.volley.toolbox.Volley;
 import com.garmin.android.connectiq.ConnectIQ;
 import com.garmin.android.connectiq.IQApp;
 import com.garmin.android.connectiq.IQDevice;
@@ -35,6 +38,7 @@ import org.json.JSONObject;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -76,6 +80,9 @@ public class UnquestionifyService extends NotificationListenerService {
     private final Map<String, Long> lastNotificationWhen = new HashMap<>();
 
     private String sessionId;
+    private String relaySessionId = null; // will not reset, and will be generated once when this app runs for the first time
+    private boolean relayStarted = false;
+    private final String relayServer = "https://fill_in_the_relay_server_domain_here";
     private Handler sessionExpireHandler;
 
     // for message types
@@ -110,6 +117,8 @@ public class UnquestionifyService extends NotificationListenerService {
 
     // if there is any pending request to start watchapp, this will be true
     private boolean pendingStartApp = false;
+
+    private RequestQueue relayRequestQueue;
     private final ConnectIQ.ConnectIQListener mCIQListener = new ConnectIQ.ConnectIQListener() {
 
         @Override
@@ -157,6 +166,23 @@ public class UnquestionifyService extends NotificationListenerService {
             return Long.compare(a.when, b.when);
         }
     };
+
+    private static final String PREF_UNIQUE_ID = "PREF_UNIQUE_ID";
+
+    private synchronized String getRelaySessionId() {
+        if (relaySessionId == null) {
+            SharedPreferences sharedPrefs = getApplicationContext().getSharedPreferences(
+                    PREF_UNIQUE_ID, Context.MODE_PRIVATE);
+            relaySessionId = sharedPrefs.getString(PREF_UNIQUE_ID, null);
+            if (relaySessionId == null) {
+                relaySessionId = UUID.randomUUID().toString();
+                SharedPreferences.Editor editor = sharedPrefs.edit();
+                editor.putString(PREF_UNIQUE_ID, relaySessionId);
+                editor.commit();
+            }
+        }
+        return relaySessionId;
+    }
 
     private String getAppName(String packageName) {
         final PackageManager pm = getApplicationContext().getPackageManager();
@@ -230,28 +256,6 @@ public class UnquestionifyService extends NotificationListenerService {
         Log.d(TAG, "Compressed PNG (" + reader.imgInfo.cols + "x" + reader.imgInfo.rows + "): " + bitmap.getByteCount() + " => " + baos.toByteArray().length + " bytes");
         //bitmap.recycle();
         return new ByteArrayInputStream(baos.toByteArray());
-    }
-
-    private Bitmap createBitmapFromText(String text) {
-        float scale = getResources().getDisplayMetrics().density;
-
-        // new anti-aliased Paint
-        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        paint.setColor(Color.WHITE);
-
-        // text size in pixels
-        paint.setTextSize((int) (6 * scale));
-
-        // draw text to the Canvas
-        Rect bounds = new Rect();
-        paint.getTextBounds(text, 0, text.length(), bounds);
-        Bitmap bitmap = Bitmap.createBitmap(bounds.width(),bounds.height(),Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(bitmap);
-        canvas.drawColor(Color.BLACK);
-
-        //canvas.draw(icon);
-        canvas.drawText(text, 0, bounds.height() - 1, paint);
-        return bitmap;
     }
 
     private void loadAllowedApps() {
@@ -382,6 +386,9 @@ public class UnquestionifyService extends NotificationListenerService {
         } catch (Exception e) {
             Log.e(TAG, "error starting httpd:" + e);
         }
+
+        relayRequestQueue = Volley.newRequestQueue(this);
+        relayStartSession();
     }
 
     @Override
@@ -396,6 +403,11 @@ public class UnquestionifyService extends NotificationListenerService {
         }
         server.stop();
         unregisterReceiver(serviceReceiver);
+
+        if (relayRequestQueue != null) {
+            relayRequestQueue.cancelAll(TAG);
+        }
+        relayEndSession();
     }
 
     public void loadCIQDevices() {
@@ -410,6 +422,26 @@ public class UnquestionifyService extends NotificationListenerService {
             }
         } catch (Exception e) {
             Log.e(TAG, "register failed:" + e);
+        }
+    }
+
+    private void updateSummaryBitmap() {
+        if (mNotifications.size() > 0) {
+            WatchNotification wn = mNotifications.get(0);
+            // glance summary bitmap
+            relayUpdate("summary", 0, wn.getSummaryBitmap());
+        }
+    }
+
+    private void uploadLatestToRelay() {
+        relayStartSession();
+        WatchNotification wn = mNotifications.get(0);
+        updateSummaryBitmap();
+        // overview bitmap
+        relayUpdate(wn.id, -1, wn.getOverviewBitmap());
+        // detail bitmaps
+        for (int i = 0; i < wn.getDetailBitmapCount(); i++) {
+            relayUpdate(wn.id, i, wn.getDetailBitmap(i));
         }
     }
 
@@ -447,6 +479,7 @@ public class UnquestionifyService extends NotificationListenerService {
                     n.appendMessage(notificationText, sbn.getNotification().when);
                     // move this to queue start
                     mNotifications.add(0, mNotifications.remove(i));
+                    uploadLatestToRelay();
                     Log.d(TAG, "[append]" + n.toLogString());
                     lastUpdatedTS = System.currentTimeMillis();
                     startWatchApp();
@@ -464,6 +497,9 @@ public class UnquestionifyService extends NotificationListenerService {
                 notificationText, getAppName(sbn.getPackageName()),
                 sbn.getNotification().getSmallIcon(), sbn.getNotification().when));
         Log.d(TAG, "[add]" + mNotifications.get(0).toLogString());
+        uploadLatestToRelay();
+
+
         /*
         // sort mNotifications by when descendingly
         mNotifications.sort(Collections.reverseOrder(new Comparator<WatchNotification>() {
@@ -482,6 +518,7 @@ public class UnquestionifyService extends NotificationListenerService {
             WatchNotification n = mNotifications.get(i);
             //if (n.key.equals(sbn.getKey()) && n.title.equals(getNotificationTitle(sbn))) {
             if (n.key.equals(sbn.getKey())) {
+                relayRemove(n.id);
                 mNotifications.remove(i);
                 lastNotificationWhen.remove(n.key);
                 Log.d(TAG, "[remove]" + n.toLogString());
@@ -489,6 +526,7 @@ public class UnquestionifyService extends NotificationListenerService {
                 break;
             }
         }
+        updateSummaryBitmap();
     }
 
     private static String getNotificationTitle(StatusBarNotification sbn) {
@@ -704,6 +742,113 @@ public class UnquestionifyService extends NotificationListenerService {
         }
     }
 
+    private void relayStartSession() {
+        if (relayStarted)
+            return;
+        relayStarted = true;
+        String url = relayServer + "/session?session=" + getRelaySessionId();
+        StringRequest request = new StringRequest(Request.Method.POST, url,
+                new Response.Listener<String>() {
+                    @Override
+                    public void onResponse(String response) {
+                        // Display the first 500 characters of the response string.
+                        Log.d(TAG, "relayStartSession done");
+                    }
+                }, new Response.ErrorListener() {
+                    @Override
+                    public void onErrorResponse(VolleyError error) {
+                        Log.e(TAG, "relayStartSession:" + error);
+                    }
+                }) {
+            @Override
+            public Map<String, String> getHeaders() throws AuthFailureError {
+                Map<String, String>  params = new HashMap<String, String>();
+                params.put("app-id", CIQ_APP);
+                return params;
+            }
+        };
+        request.setTag(TAG);
+        relayRequestQueue.add(request);
+    }
+
+    private void relayEndSession() {
+        relayStarted = false;
+        String url = relayServer + "/session?session=" + getRelaySessionId();
+        StringRequest request = new StringRequest(Request.Method.DELETE, url,
+                new Response.Listener<String>() {
+                    @Override
+                    public void onResponse(String response) {
+                        // Display the first 500 characters of the response string.
+                        Log.d(TAG, "relayEndSession done");
+                    }
+                }, new Response.ErrorListener() {
+            @Override
+            public void onErrorResponse(VolleyError error) {
+                Log.e(TAG, "relayEndSession:" + error);
+            }
+        }) {
+            @Override
+            public Map<String, String> getHeaders() throws AuthFailureError {
+                Map<String, String>  params = new HashMap<String, String>();
+                params.put("app-id", CIQ_APP);
+                return params;
+            }
+        };
+        request.setTag(TAG);
+        relayRequestQueue.add(request);
+    }
+
+
+    private void relayUpdate(final String notificationId, int page, Bitmap bitmap) {
+        String url = relayServer + "/notifications/" + notificationId + "/" + page + "?session=" + getRelaySessionId();
+        StringRequest request = new StringRequest(Request.Method.PUT, url,
+                new Response.Listener<String>() {
+                    @Override
+                    public void onResponse(String response) {
+                        Log.d(TAG, "relayUpdate done");
+                    }
+                }, new Response.ErrorListener() {
+                    @Override
+                    public void onErrorResponse(VolleyError error) {
+                        Log.e(TAG, "relayUpdate:" + error);
+                    }
+                }) {
+            @Override
+            public byte[] getBody() throws AuthFailureError {
+                try {
+                    ByteArrayInputStream inputStream = bitmapToInputStream(bitmap);
+                    byte[] targetArray = new byte[inputStream.available()];
+                    inputStream.read(targetArray);
+                    return targetArray;
+                } catch (IOException e) {
+                    Log.e(TAG, "relayUpdate error:" + e);
+                    return null;
+                }
+            }
+        };
+        request.setTag(TAG);
+        relayRequestQueue.add(request);
+    }
+
+    private void relayRemove(final String notificationId) {
+        String url = relayServer + "/notifications/" + notificationId + "/0?session=" + getRelaySessionId();
+        StringRequest request = new StringRequest(Request.Method.DELETE, url,
+                new Response.Listener<String>() {
+                    @Override
+                    public void onResponse(String response) {
+                        Log.d(TAG, "relayRemove done");
+                    }
+                },
+                new Response.ErrorListener() {
+                    @Override
+                    public void onErrorResponse(VolleyError error) {
+                        Log.e(TAG, "relayRemove:" + error);
+                    }
+                });
+        request.setTag(TAG);
+        relayRequestQueue.add(request);
+    }
+
     private final Handler mNotificationHandler = new NotificationHandler();
 
     private class NotificationHandler extends Handler {
@@ -760,7 +905,7 @@ public class UnquestionifyService extends NotificationListenerService {
 
     // the HTTPD service for watch to read/dismiss notifications
     private class NotificationHTTPD extends NanoHTTPD {
-        private String TAG = this.getClass().getSimpleName();
+        private final String TAG = this.getClass().getSimpleName();
 
         NotificationHTTPD() {
             super(8080);
@@ -828,6 +973,7 @@ public class UnquestionifyService extends NotificationListenerService {
                 JSONObject json = new JSONObject();
                 try {
                     json.put("session", sessionId);
+                    json.put("relay_session", getRelaySessionId());
                 } catch (JSONException e) {
                     Log.e(TAG, "unable to create json object");
                     return new NanoHTTPD.Response(Response.Status.INTERNAL_ERROR, "application/json",
@@ -850,7 +996,7 @@ public class UnquestionifyService extends NotificationListenerService {
             // all other endpoints needs sessionId, so let's check it now
             if (TextUtils.isEmpty(sessionId)) {
                 forbiddenCount++;
-                Log.e(TAG, "/request_session should be requested first!");
+                Log.e(TAG, "/request_session should be requested first! URI:" + uri);
                 return new NanoHTTPD.Response(Response.Status.FORBIDDEN, "application/json",
                         createErrorJSONResponse("No Permission").toString());
             } else if (params.get("session") == null || !Objects.equals(params.get("session"), sessionId)) {
@@ -863,26 +1009,27 @@ public class UnquestionifyService extends NotificationListenerService {
             // ok, we have permission. Let's proceed
             scheduleSessionExpire();
 
-            if (method == Method.GET && uri.equals("/notification_summary")) {
-                if (mNotifications.size() == 0) {
-                    return new NanoHTTPD.Response(Response.Status.OK, "image/png",
-                            bitmapToInputStream(createBitmapFromText("No Notification")));
-                }
-                int width = 172, height = 40, textSize = 19;
+            if (method == Method.GET && uri.equals("/set_glance_dimension")) {
+                int width = 200, height = 100, textHeight = 10;
                 if (params.get("width") != null)
                     width = Integer.parseInt(Objects.requireNonNull(params.get("width")));
                 if (params.get("height") != null)
                     height = Integer.parseInt(Objects.requireNonNull(params.get("height")));
-                if (params.get("textSize") != null)
-                    textSize = Integer.parseInt(Objects.requireNonNull(params.get("textSize")));
+                if (params.get("textHeight") != null)
+                    textHeight = Integer.parseInt(Objects.requireNonNull(params.get("textHeight")));
+                Log.d(TAG, "Glance view image will be of " + width + "x" + height + ", text height:" + textHeight);
+                WatchNotification.setGlanceDimension(width, height, textHeight);
 
-                Bitmap bitmap = mNotifications.get(0).getSummaryBitmap(width, height, textSize);
-                if (bitmap == null) {
-                    Log.w(TAG, "request for summary image failed");
-                    return new NanoHTTPD.Response(Response.Status.OK, "image/png",
-                            bitmapToInputStream(createBitmapFromText("Error")));
+                // create JSON
+                JSONObject json = new JSONObject();
+                try {
+                    json.put("session", sessionId);
+                } catch (JSONException e) {
+                    Log.e(TAG, "unable to create json object");
+                    return new NanoHTTPD.Response(Response.Status.INTERNAL_ERROR, "application/json",
+                            createErrorJSONResponse("unable to create response json").toString());
                 }
-                return new NanoHTTPD.Response(Response.Status.OK, "image/png", bitmapToInputStream(bitmap));
+                return new NanoHTTPD.Response(Response.Status.OK, "application/json", json.toString());
             }
 
             if (method == Method.GET && uri.equals("/notifications")) {
@@ -909,53 +1056,6 @@ public class UnquestionifyService extends NotificationListenerService {
                 return new NanoHTTPD.Response(Response.Status.OK, "application/json", json.toString());
             }
 
-            if (method == Method.GET && uri.startsWith("/notifications/")) {
-                if (!connected) {
-                    Log.e(TAG, "listener not ready yet");
-                    return new NanoHTTPD.Response(Response.Status.OK, "image/png",
-                            bitmapToInputStream(createBitmapFromText("Unavailable")));
-                }
-
-                int page = -1; // -1 is the overview page (max 3 lines)
-                if (params.get("page") != null)
-                    page = Integer.parseInt(Objects.requireNonNull(params.get("page")));
-                Log.d(TAG, "/notifications requested with page:" + page);
-                if (page > -1)
-                    notificationDetailQueryCount++;
-                bitmapQueryCount++;
-                String id = uri.substring("/notifications/".length());
-                if (mNotifications.size() == 0) {
-                    return new NanoHTTPD.Response(Response.Status.OK, "image/png",
-                            bitmapToInputStream(createBitmapFromText("No Notification")));
-                }
-                WatchNotification notification = null;
-                for (final WatchNotification n : mNotifications) {
-                    if (n.id.equals(id)) {
-                        notification = n;
-                        break;
-                    }
-                }
-                if (notification == null) {
-                    Log.e(TAG, "no notification for id:" + id);
-                    return new NanoHTTPD.Response(Response.Status.OK, "image/png",
-                            bitmapToInputStream(createBitmapFromText("Notification dismissed")));
-                }
-
-                // ok, now we want to create bitmap for notification
-                Bitmap bitmap;
-                if (page == -1)
-                    bitmap = notification.getOverviewBitmap();
-                else
-                    bitmap = notification.getDetailBitmap(page);
-
-                if (bitmap == null) {
-                    Log.w(TAG, "request for image page " + page + " failed");
-                    return new NanoHTTPD.Response(Response.Status.NO_CONTENT, "application/json",
-                            createErrorJSONResponse("No such page").toString());
-                }
-                return new NanoHTTPD.Response(Response.Status.OK, "image/png", bitmapToInputStream(bitmap));
-            }
-
             if (method == Method.DELETE && uri.startsWith("/notifications")) {
                 String id = "";
                 if (uri.length() > "/notifications/".length())
@@ -966,10 +1066,14 @@ public class UnquestionifyService extends NotificationListenerService {
                     if (all) {
                         Log.d(TAG, "[dismiss]" + n.toLogString());
                         cancelNotification(n.key);
+                        relayRemove(n.id);
                     } else if (n.id.equals(id)) {
                         Log.d(TAG, "[dismiss]" + n.toLogString());
                         // dismiss this notification
                         cancelNotification(n.key);
+                        relayRemove(n.id);
+                        mNotifications.remove(n);
+                        lastNotificationWhen.remove(n.key);
                         // onNotificationRemoved will be called so there is no need to process mNotifications here
                         return new NanoHTTPD.Response(Response.Status.OK, "application/json",
                                 createErrorJSONResponse("").toString());

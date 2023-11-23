@@ -29,10 +29,11 @@ public class WatchNotification {
     private final String TAG = this.getClass().getSimpleName();
 
     private Bitmap summaryBitmap;
+    private Bitmap glanceSummaryBitmap;
     private Bitmap overviewBitmap;
     private Vector<Bitmap> pageBitmaps;
     private boolean hasDetail = false;
-    private static int width = 260, height = 260;
+    private static int width = 260, height = 260, glanceWidth = 200, glanceHeight = 100, glanceTextHeight = 10;
     private Context context;
     private Vector<String> msg;
     private String appName;
@@ -48,6 +49,12 @@ public class WatchNotification {
     static void setDimension(int watchWidth, int watchHeight) {
         width = watchWidth;
         height = watchHeight;
+    }
+
+    static void setGlanceDimension(int width, int height, int textHeight) {
+        glanceWidth = width;
+        glanceHeight = height;
+        glanceTextHeight = textHeight;
     }
 
     WatchNotification(Context context, String key, String title, String text, String appName, Icon icon, long when) {
@@ -160,9 +167,9 @@ public class WatchNotification {
         return null;
     }
 
-    Bitmap getSummaryBitmap(int width, int height, int textSize) {
+    Bitmap getSummaryBitmap() {
         // always re-build summary bitmap
-        _buildSummaryBitmap(width, height, textSize);
+        _buildSummaryBitmap();
         return summaryBitmap;
     }
 
@@ -180,9 +187,9 @@ public class WatchNotification {
         return DateFormat.getTimeInstance(DateFormat.SHORT).format(new Date(when));
     }
 
-    private void _buildSummaryBitmap(int width, int height, int textSize) {
-        Log.d(TAG, "building summary bitmap of " + width + "x" + height + " text size:" + textSize);
-        Pair<Bitmap, Integer> p = _doTextLayout(toSummaryString(), width, height, 2, textSize, false);
+    private void _buildSummaryBitmap() {
+        Log.d(TAG, "building summary bitmap of " + glanceWidth + "x" + glanceHeight + " text size:" + glanceTextHeight);
+        Pair<Bitmap, Integer> p = _doTextLayout(toSummaryString(), glanceWidth, glanceHeight, 2, glanceTextHeight, false);
         summaryBitmap = p.first;
     }
 
@@ -236,7 +243,7 @@ public class WatchNotification {
                 .setEllipsize(TextUtils.TruncateAt.END)
                 .build();
 
-        Log.v(TAG, "[_doTextLayout] max lines:" + maxLines);
+        Log.v(TAG, "[_doTextLayout] width:" + width + ", height:" + height + ", max lines:" + maxLines);
 
         // get height of multiline text layout
         int layoutHeight = textLayout.getHeight();
