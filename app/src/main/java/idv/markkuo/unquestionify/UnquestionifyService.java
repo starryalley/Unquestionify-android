@@ -14,7 +14,6 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
-import android.preference.PreferenceManager;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
 import android.text.TextUtils;
@@ -60,6 +59,7 @@ import ar.com.hjg.pngj.chunks.PngChunkPLTE;
 
 public class UnquestionifyService extends NotificationListenerService {
     private final String TAG = this.getClass().getSimpleName();
+    private static final String PREF_UNIQUE_ID = "UnquestionifyAppPref";
 
     // for starting app on the watch
     private static final String CIQ_APP = "c2842d1b-ad5c-47c6-b28f-cc495abd7d32";
@@ -167,8 +167,6 @@ public class UnquestionifyService extends NotificationListenerService {
         }
     };
 
-    private static final String PREF_UNIQUE_ID = "PREF_UNIQUE_ID";
-
     private synchronized String getRelaySessionId() {
         if (relaySessionId == null) {
             SharedPreferences sharedPrefs = getApplicationContext().getSharedPreferences(
@@ -178,7 +176,7 @@ public class UnquestionifyService extends NotificationListenerService {
                 relaySessionId = UUID.randomUUID().toString();
                 SharedPreferences.Editor editor = sharedPrefs.edit();
                 editor.putString(PREF_UNIQUE_ID, relaySessionId);
-                editor.commit();
+                editor.apply();
             }
         }
         return relaySessionId;
@@ -259,11 +257,11 @@ public class UnquestionifyService extends NotificationListenerService {
     }
 
     private void loadAllowedApps() {
-        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+        SharedPreferences preferences = getApplicationContext().getSharedPreferences(
+                PREF_UNIQUE_ID, Context.MODE_PRIVATE);
         mAllowedSources = preferences.getStringSet("allowed_apps", null);
         if (mAllowedSources == null) {
             mAllowedSources = new HashSet<>();
-            mAllowedSources.add("com.google.android.talk");//hangout
             mAllowedSources.add("jp.naver.line.android");//Line
             mAllowedSources.add("com.whatsapp"); //what's app
             mAllowedSources.add("com.facebook.orca"); //fb messenger
@@ -276,7 +274,7 @@ public class UnquestionifyService extends NotificationListenerService {
     }
 
     static void loadStatistics(Context context) {
-        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
+        SharedPreferences preferences = context.getSharedPreferences(PREF_UNIQUE_ID, Context.MODE_PRIVATE);
         sessionCount = preferences.getInt("sessionCount", 0);
         promptShownCount = preferences.getInt("promptShownCount", 0);
         promptNotShownCount = preferences.getInt("promptNotShownCount", 0);
@@ -290,7 +288,7 @@ public class UnquestionifyService extends NotificationListenerService {
     }
 
     static void saveStatistics(Context context) {
-        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
+        SharedPreferences preferences = context.getSharedPreferences(PREF_UNIQUE_ID, Context.MODE_PRIVATE);
         SharedPreferences.Editor editor = preferences.edit();
         editor.putInt("sessionCount", sessionCount);
         editor.putInt("promptShownCount", promptShownCount);
@@ -314,22 +312,22 @@ public class UnquestionifyService extends NotificationListenerService {
     }
 
     private boolean getNonASCIIOnly() {
-        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+        SharedPreferences preferences = getApplicationContext().getSharedPreferences(PREF_UNIQUE_ID, Context.MODE_PRIVATE);
         return preferences.getBoolean("nonascii", false);
     }
 
     private boolean getGroupSimilarMessage() {
-        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+        SharedPreferences preferences = getApplicationContext().getSharedPreferences(PREF_UNIQUE_ID, Context.MODE_PRIVATE);
         return preferences.getBoolean("group_msg", false);
     }
 
     private boolean getShowPrompt() {
-        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+        SharedPreferences preferences = getApplicationContext().getSharedPreferences(PREF_UNIQUE_ID, Context.MODE_PRIVATE);
         return preferences.getBoolean("show_prompt", true);
     }
 
     private void saveAllowedSources() {
-        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+        SharedPreferences preferences = getApplicationContext().getSharedPreferences(PREF_UNIQUE_ID, Context.MODE_PRIVATE);
         SharedPreferences.Editor editor = preferences.edit();
         editor.putStringSet("allowed_apps", mAllowedSources);
         editor.apply();
@@ -347,7 +345,7 @@ public class UnquestionifyService extends NotificationListenerService {
         loadStatistics(getApplicationContext());
 
         // save default textsize setting
-        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+        SharedPreferences preferences = getApplicationContext().getSharedPreferences(PREF_UNIQUE_ID, Context.MODE_PRIVATE);
         if (!preferences.contains("textsize")) {
             SharedPreferences.Editor editor = preferences.edit();
             editor.putString("textsize", Integer.toString(defaultTextSize));
